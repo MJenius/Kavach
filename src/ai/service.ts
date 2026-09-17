@@ -8,6 +8,7 @@ import {
 } from './types.ts';
 import { ValidationResult, validateDocumentExtraction } from './structured-output.ts';
 import { BedrockAIService as BedrockRuntime } from './bedrock.ts';
+import { SupervisorAgent } from '../agents/supervisor-agent.ts';
 
 /**
  * Enhanced AIService interface supporting text, structured generation,
@@ -125,11 +126,24 @@ export class BedrockAIService implements AIService {
     return res.text;
   }
 
-  async investigateCase(_caseId: string): Promise<AIInvestigationResult> {
-    // In Bedrock mode, the investigation is driven via Forensics & Supervisor agents.
-    // Fall back cleanly if credentials are not configured.
-    const mock = new MockAIService();
-    return mock.investigateCase(_caseId);
+  async investigateCase(caseId: string, contextData?: Record<string, unknown>): Promise<AIInvestigationResult> {
+    // In production/Bedrock mode, investigations execute through SupervisorAgent,
+    // coordinating Forensics, Earnings, and Policy agents over real tools.
+    const workerId = (contextData?.workerId as string) || 'worker-vikram-01';
+    const supervisor = new SupervisorAgent();
+    const output = await supervisor.run({
+      caseId,
+      workerId,
+      tripId: caseId,
+      action: 'INVESTIGATE_CASE',
+      payload: contextData,
+    });
+
+    if (!output.investigationResult) {
+      throw new Error(`SupervisorAgent failed to produce an investigation result for case ${caseId}`);
+    }
+
+    return output.investigationResult;
   }
 
   async extractDocumentData(documentUri: string): Promise<Record<string, unknown>> {

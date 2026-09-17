@@ -32,4 +32,16 @@ describe('AIService Abstraction & Bedrock Adapter', () => {
     const bedrock = new BedrockAIService({ modelId: 'anthropic.claude-3v2' });
     await expect(bedrock.generateText('Test')).rejects.toThrow('requires AWS credentials');
   });
+
+  it('BedrockAIService.investigateCase delegates directly to SupervisorAgent', async () => {
+    const bedrock = new BedrockAIService({ modelId: 'anthropic.claude-3v2' });
+    const result = await bedrock.investigateCase('trip-2026-09-15-001', {
+      workerId: 'worker-vikram-01',
+    });
+
+    expect(result).toBeDefined();
+    expect(result.findings.length).toBeGreaterThan(0);
+    expect(result.summary).toContain('Multi-agent investigation for trip');
+    expect(result.findings[0].evidenceIds).toContain('ev-store-arrival-gps');
+  });
 });
