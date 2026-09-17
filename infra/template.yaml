@@ -100,7 +100,7 @@ Resources:
   ApiHandlerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/api/index.handler
+      Handler: index.handler
       CodeUri: ../
       Policies:
 
