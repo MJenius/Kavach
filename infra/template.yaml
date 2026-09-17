@@ -114,6 +114,7 @@ Resources:
               Action:
                 - bedrock:InvokeModel
                 - bedrock:InvokeModelWithResponseStream
+                - bedrock-mantle:CreateInference
               Resource: '*'
       Events:
         ApiRoot:

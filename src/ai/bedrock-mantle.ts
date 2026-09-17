@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { bedrock } from 'openai/providers/bedrock/aws';
 import {
   TextGenerationRequest,
   TextGenerationResponse,
@@ -21,18 +22,27 @@ export class BedrockMantleAIServiceError extends Error {
 }
 
 /**
- * BedrockMantleAIService connects to AWS Bedrock Mantle using the OpenAI-compatible API.
+ * BedrockMantleAIService connects to AWS Bedrock Mantle using the OpenAI-compatible API
+ * signed with AWS Signature Version 4 (SigV4) via the standard AWS credential chain.
  * Uses BEDROCK_MANTLE_BASE_URL (default: https://bedrock-mantle.ap-south-1.api.aws/v1)
  * and BEDROCK_MODEL_ID (default: openai.gpt-oss-120b).
  */
 export class BedrockMantleAIService {
   readonly modelId: string;
   readonly baseURL: string;
+  readonly region: string;
   readonly maxTokens: number;
   readonly temperature: number;
   private client: OpenAI;
 
-  constructor(config?: AIServiceConfig & { baseURL?: string; apiKey?: string; client?: OpenAI }) {
+  constructor(
+    config?: AIServiceConfig & {
+      baseURL?: string;
+      apiKey?: string;
+      region?: string;
+      client?: OpenAI;
+    }
+  ) {
     this.modelId =
       config?.modelId ||
       process.env.BEDROCK_MODEL_ID ||
@@ -41,25 +51,40 @@ export class BedrockMantleAIService {
       config?.baseURL ||
       process.env.BEDROCK_MANTLE_BASE_URL ||
       'https://bedrock-mantle.ap-south-1.api.aws/v1';
+    this.region =
+      config?.region ||
+      process.env.AWS_REGION ||
+      process.env.AWS_DEFAULT_REGION ||
+      'ap-south-1';
     this.maxTokens = config?.maxTokens || 4096;
     this.temperature = config?.temperature ?? 0.1;
 
     if (config?.client) {
       this.client = config.client;
     } else {
-      const apiKey =
+      const explicitApiKey =
         config?.apiKey ||
         process.env.BEDROCK_API_KEY ||
         process.env.BEDROCK_MANTLE_API_KEY ||
-        process.env.AWS_BEARER_TOKEN_BEDROCK ||
-        process.env.OPENAI_API_KEY ||
-        'bedrock-mantle-session';
+        process.env.OPENAI_API_KEY;
 
-      this.client = new OpenAI({
-        baseURL: this.baseURL,
-        apiKey,
-        dangerouslyAllowBrowser: false,
-      });
+      if (explicitApiKey) {
+        // Direct API Key mode (for local testing/mock environments with direct key)
+        this.client = new OpenAI({
+          baseURL: this.baseURL,
+          apiKey: explicitApiKey,
+          dangerouslyAllowBrowser: false,
+        });
+      } else {
+        // Production AWS SigV4 mode using Lambda's default AWS credential chain
+        this.client = new OpenAI({
+          provider: bedrock({
+            endpoint: 'mantle',
+            region: this.region,
+            baseURL: this.baseURL,
+          }),
+        });
+      }
     }
   }
 
