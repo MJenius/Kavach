@@ -101,9 +101,10 @@ Resources:
   ApiHandlerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: index.handler
-      CodeUri: ../src/api/
+      Handler: src/api/index.handler
+      CodeUri: ../
       Policies:
+
         - DynamoDBCrudPolicy:
             TableName: !Ref WorkerDataTable
         - S3CrudPolicy:
@@ -121,6 +122,18 @@ Resources:
             RestApiId: !Ref KavachApi
             Path: /{proxy+}
             Method: ANY
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: false
+        Target: "node20"
+        Sourcemap: false
+        Format: "esm"
+        OutExtension:
+          - .js=.mjs
+        EntryPoints:
+          - src/api/index.ts
+
 
   # ============================================================================
   # 4. STEP FUNCTIONS (Investigation & Dispute Workflow) - Person 3

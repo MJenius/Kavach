@@ -36,6 +36,7 @@ export default [
     },
   },
   {
-    ignores: ['dist/**', 'build/**', 'node_modules/**', '.aws-sam/**', 'coverage/**'],
+    ignores: ['dist/**', 'dist-lambda/**', 'build/**', 'node_modules/**', '.aws-sam/**', 'coverage/**'],
   },
 ];
+
