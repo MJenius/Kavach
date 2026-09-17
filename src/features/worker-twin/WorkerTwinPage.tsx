@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MockWorkerTwinAgent } from '../../agents/index.ts';
+import { createApiClient } from '../../api/mock-client.ts';
 
 export const WorkerTwinPage: React.FC = () => {
   const [query, setQuery] = useState('How can I optimize my earnings tomorrow?');
@@ -8,8 +8,8 @@ export const WorkerTwinPage: React.FC = () => {
 
   const handleAskTwin = async () => {
     setLoading(true);
-    const agent = new MockWorkerTwinAgent();
-    const res = await agent.run({ workerId: 'worker-vikram-01', query });
+    const client = createApiClient();
+    const res = await client.queryWorkerTwin({ workerId: 'worker-vikram-01', query });
     setResponse(res.answer);
     setLoading(false);
   };

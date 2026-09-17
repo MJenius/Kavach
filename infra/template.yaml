@@ -131,6 +131,8 @@ Resources:
         Format: "esm"
         OutExtension:
           - .js=.mjs
+        Banner:
+          - "js=import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);"
         EntryPoints:
           - src/api/index.ts
 

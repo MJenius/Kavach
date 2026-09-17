@@ -1,7 +1,8 @@
 import { Agent } from './index.ts';
 import { EarningsAnalysisResult } from '../ai/types.ts';
 import { validateEarningsAnalysis, validateEvidenceIds } from '../ai/structured-output.ts';
-import { BedrockAIService } from '../ai/bedrock.ts';
+import { BedrockMantleAIService } from '../ai/bedrock-mantle.ts';
+import type { BedrockLLMProvider } from '../ai/types.ts';
 import { EARNINGS_SYSTEM_PROMPT, generateEarningsUserPrompt } from '../prompts/earnings.prompt.ts';
 import { Finding } from '../domain/index.ts';
 import {
@@ -25,11 +26,11 @@ export class EarningsAgent implements Agent<EarningsAgentInput, EarningsAnalysis
   readonly name = 'EarningsAgent';
   readonly description = 'Reconciles expected vs actual payouts, incentives, and operational expenses using deterministic math.';
 
-  private bedrock: BedrockAIService | null;
+  private bedrock: BedrockLLMProvider | null;
 
-  constructor(bedrock?: BedrockAIService | null) {
+  constructor(bedrock?: BedrockLLMProvider | null) {
     const config = getAgentRuntimeConfig();
-    this.bedrock = bedrock ?? (config.useBedrock ? new BedrockAIService() : null);
+    this.bedrock = bedrock ?? (config.useBedrock ? new BedrockMantleAIService() : null);
   }
 
   async run(input: EarningsAgentInput): Promise<EarningsAnalysisResult> {

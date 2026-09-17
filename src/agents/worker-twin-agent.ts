@@ -1,7 +1,8 @@
 import { Agent } from './index.ts';
 import { WorkerTwinQuery, WorkerTwinResponse } from '../domain/index.ts';
 import { validateWorkerTwinResponse } from '../ai/structured-output.ts';
-import { BedrockAIService } from '../ai/bedrock.ts';
+import { BedrockMantleAIService } from '../ai/bedrock-mantle.ts';
+import type { BedrockLLMProvider } from '../ai/types.ts';
 import { WORKER_TWIN_SYSTEM_PROMPT, generateWorkerTwinUserPrompt } from '../prompts/worker-twin.prompt.ts';
 import { getWorker, getEarnings, runSimulation } from './tools/index.ts';
 import { getAgentRuntimeConfig } from './agent-config.ts';
@@ -11,11 +12,11 @@ export class WorkerTwinAgent implements Agent<WorkerTwinQuery, WorkerTwinRespons
   readonly name = 'WorkerTwinAgent';
   readonly description = 'Personalized worker intelligence answering historical earnings and bottleneck questions using evidence and counterfactual simulation.';
 
-  private bedrock: BedrockAIService | null;
+  private bedrock: BedrockLLMProvider | null;
 
-  constructor(bedrock?: BedrockAIService | null) {
+  constructor(bedrock?: BedrockLLMProvider | null) {
     const config = getAgentRuntimeConfig();
-    this.bedrock = bedrock ?? (config.useBedrock ? new BedrockAIService() : null);
+    this.bedrock = bedrock ?? (config.useBedrock ? new BedrockMantleAIService() : null);
   }
 
   async run(input: WorkerTwinQuery): Promise<WorkerTwinResponse> {

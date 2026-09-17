@@ -9,7 +9,7 @@
     "dev:ui": "vite",
     "dev:api": "tsx watch src/api/mock-server.ts",
     "build": "tsc -b && vite build",
-    "build:lambda": "esbuild src/api/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist-lambda/index.mjs",
+    "build:lambda": "esbuild src/api/index.ts --bundle --platform=node --target=node20 --format=esm \"--banner:js=import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=dist-lambda/index.mjs",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
