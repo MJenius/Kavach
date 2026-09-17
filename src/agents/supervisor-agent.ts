@@ -1,10 +1,12 @@
 import { Agent } from './index.ts';
 import { AIInvestigationResult, Finding } from '../domain/index.ts';
 import { validateAIInvestigationResult } from '../ai/structured-output.ts';
+import { BedrockAIService } from '../ai/bedrock.ts';
 import { ForensicsAgent } from './forensics-agent.ts';
 import { EarningsAgent } from './earnings-agent.ts';
 import { PolicyAgent } from './policy-agent.ts';
 import { WorkerTwinAgent } from './worker-twin-agent.ts';
+import { getAgentRuntimeConfig } from './agent-config.ts';
 
 export interface SupervisorInput {
   caseId?: string;
@@ -30,10 +32,20 @@ export class SupervisorAgent implements Agent<SupervisorInput, SupervisorOutput>
   readonly name = 'SupervisorAgent';
   readonly description = 'Coordinates Forensics, Earnings, and Policy agents to synthesize evidence-backed investigation results.';
 
-  private forensicsAgent = new ForensicsAgent();
-  private earningsAgent = new EarningsAgent();
-  private policyAgent = new PolicyAgent();
-  private workerTwinAgent = new WorkerTwinAgent();
+  private bedrock: BedrockAIService | null;
+  private forensicsAgent: ForensicsAgent;
+  private earningsAgent: EarningsAgent;
+  private policyAgent: PolicyAgent;
+  private workerTwinAgent: WorkerTwinAgent;
+
+  constructor(bedrock?: BedrockAIService | null) {
+    const config = getAgentRuntimeConfig();
+    this.bedrock = bedrock ?? (config.useBedrock ? new BedrockAIService() : null);
+    this.forensicsAgent = new ForensicsAgent(this.bedrock);
+    this.earningsAgent = new EarningsAgent(this.bedrock);
+    this.policyAgent = new PolicyAgent(this.bedrock);
+    this.workerTwinAgent = new WorkerTwinAgent(this.bedrock);
+  }
 
   async run(input: SupervisorInput): Promise<SupervisorOutput> {
     const tripId = input.tripId || (input.payload?.tripId as string) || 'trip-2026-09-15-001';

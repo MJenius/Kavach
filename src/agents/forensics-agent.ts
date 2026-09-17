@@ -1,6 +1,8 @@
 import { Agent } from './index.ts';
 import { ForensicsAnalysisResult } from '../ai/types.ts';
-import { validateForensicsAnalysis } from '../ai/structured-output.ts';
+import { validateForensicsAnalysis, validateEvidenceIds } from '../ai/structured-output.ts';
+import { BedrockAIService } from '../ai/bedrock.ts';
+import { FORENSICS_SYSTEM_PROMPT, generateForensicsUserPrompt } from '../prompts/forensics.prompt.ts';
 import {
   getTrip,
   getTripEvents,
@@ -8,6 +10,9 @@ import {
   calculateWaitingTime,
   evaluateSLAFeasibility,
 } from './tools/index.ts';
+import { getEvidenceByIds } from './tools/evidence-tools.ts';
+import { getAgentRuntimeConfig } from './agent-config.ts';
+import { reconstructTrip } from '../evidence/reconstruction.ts';
 
 export interface ForensicsAgentInput {
   tripId: string;
@@ -16,6 +21,13 @@ export interface ForensicsAgentInput {
 export class ForensicsAgent implements Agent<ForensicsAgentInput, ForensicsAnalysisResult> {
   readonly name = 'ForensicsAgent';
   readonly description = 'Reconstructs delivery timeline, assesses feasibility with deterministic math, and produces evidence-backed Findings.';
+
+  private bedrock: BedrockAIService | null;
+
+  constructor(bedrock?: BedrockAIService | null) {
+    const config = getAgentRuntimeConfig();
+    this.bedrock = bedrock ?? (config.useBedrock ? new BedrockAIService() : null);
+  }
 
   async run(input: ForensicsAgentInput): Promise<ForensicsAnalysisResult> {
     const trip = await getTrip(input.tripId);
@@ -48,21 +60,30 @@ export class ForensicsAgent implements Agent<ForensicsAgentInput, ForensicsAnaly
         ? calculateWaitingTime(storeArrival.timestamp, deliveryCompleted.timestamp)
         : 0;
 
-    const allocatedSla = trip.slaSeconds || 600; // 10 minutes allocated
+    const allocatedSla = trip.slaSeconds || 600;
     const feasibility = evaluateSLAFeasibility(allocatedSla, waitSeconds, transitSeconds);
 
+    // Gather evidence IDs from events
     const gatheredEvidenceIds: string[] = [];
     for (const ev of events) {
       if (ev.evidenceIds) {
         gatheredEvidenceIds.push(...ev.evidenceIds);
       }
     }
-    // Add deterministic calculation evidence from fixture if applicable
     if (!gatheredEvidenceIds.includes('ev-wait-calc')) {
       gatheredEvidenceIds.push('ev-wait-calc');
     }
 
-    const missingEvidence: string[] = [];
+    // Retrieve actual evidence objects to validate IDs
+    const evidenceItems = await getEvidenceByIds(gatheredEvidenceIds);
+    const availableEvidenceIds = evidenceItems.map((e) => e.id);
+
+    // Use Person 2's reconstruction engine
+    const reconstruction = reconstructTrip(trip, events, evidenceItems);
+
+    const missingEvidence: string[] = [
+      ...reconstruction.missingEvidence,
+    ];
     const hasDeliveryPhoto = gatheredEvidenceIds.includes('ev-delivery-handover-photo');
     if (!hasDeliveryPhoto) {
       missingEvidence.push('Customer app delivery handover photo');
@@ -75,6 +96,78 @@ export class ForensicsAgent implements Agent<ForensicsAgentInput, ForensicsAnaly
       );
     }
 
+    const calculatedFacts = [
+      {
+        description: `Merchant waiting duration: ${Math.floor(waitSeconds / 60)} minutes`,
+        calculationSource: 'KAVACH_DETERMINISTIC_ENGINE (calculateDurationSeconds)',
+        value: waitSeconds as unknown,
+      },
+      {
+        description: `Remaining SLA for transit after merchant queue: ${Math.floor(feasibility.remainingSecondsForTransit / 60)} minutes`,
+        calculationSource: 'KAVACH_DETERMINISTIC_ENGINE (calculateSLAFeasibility)',
+        value: feasibility.remainingSecondsForTransit as unknown,
+      },
+      {
+        description: `Transit shortfall: ${Math.floor(feasibility.transitShortfallSeconds / 60)} minutes`,
+        calculationSource: 'KAVACH_DETERMINISTIC_ENGINE (calculateSLAFeasibility)',
+        value: feasibility.transitShortfallSeconds as unknown,
+      },
+    ];
+
+    // If Bedrock is available, use AI for interpretation
+    if (this.bedrock) {
+      try {
+        const userPrompt = generateForensicsUserPrompt({
+          tripId: trip.id,
+          trip: trip as unknown as Record<string, unknown>,
+          events: events as unknown as Array<Record<string, unknown>>,
+          evidence: evidenceItems as unknown as Array<Record<string, unknown>>,
+          platformClaim: (platformClaim || {}) as Record<string, unknown>,
+          calculations: {
+            waitingDurationSeconds: waitSeconds,
+            transitDurationSeconds: transitSeconds,
+            totalDurationSeconds,
+            allocatedSlaSeconds: allocatedSla,
+            remainingSlaSecondsAfterWait: feasibility.remainingSecondsForTransit,
+            slaFeasible: feasibility.isFeasible,
+            transitShortfallSeconds: feasibility.transitShortfallSeconds,
+            reconstructionSummary: {
+              storeWaitSeconds: reconstruction.storeWaitSeconds,
+              deliveryDurationSeconds: reconstruction.deliveryDurationSeconds,
+              slaFeasibility: reconstruction.slaFeasibility,
+              missingEvents: reconstruction.missingEvents,
+            },
+          },
+        });
+
+        const result = await this.bedrock.generateStructured<ForensicsAnalysisResult>({
+          prompt: userPrompt,
+          systemPrompt: FORENSICS_SYSTEM_PROMPT,
+          targetSchemaName: 'ForensicsAnalysisResult',
+          validate: validateForensicsAnalysis,
+        });
+
+        if (result.success && result.data) {
+          // Validate evidence IDs — strip any fabricated ones
+          const fabricated = validateEvidenceIds(result.data.evidenceIds, availableEvidenceIds);
+          if (fabricated.length > 0) {
+            result.data.evidenceIds = result.data.evidenceIds.filter((id) => !fabricated.includes(id));
+          }
+          for (const finding of result.data.findings) {
+            const fabricatedFinding = validateEvidenceIds(finding.evidenceIds, availableEvidenceIds);
+            if (fabricatedFinding.length > 0) {
+              finding.evidenceIds = finding.evidenceIds.filter((id) => !fabricatedFinding.includes(id));
+            }
+          }
+          return result.data;
+        }
+        // Fall through to deterministic path on failure
+      } catch {
+        // Fall through to deterministic path on Bedrock failure
+      }
+    }
+
+    // Deterministic path (mock mode or Bedrock failure fallback)
     const rawResult: ForensicsAnalysisResult = {
       tripId: trip.id,
       timelineSummary: `Trip ${trip.id} reconstructed: Arrived at merchant at ${storeArrival?.timestamp || 'unknown'}, waited ${Math.floor(waitSeconds / 60)} minutes before package handover at ${packageReceived?.timestamp || 'unknown'}.`,
@@ -96,24 +189,8 @@ export class ForensicsAgent implements Agent<ForensicsAgentInput, ForensicsAnaly
       },
       contradictions,
       missingEvidence,
-      evidenceIds: gatheredEvidenceIds,
-      calculatedFacts: [
-        {
-          description: `Merchant waiting duration: ${Math.floor(waitSeconds / 60)} minutes`,
-          calculationSource: 'KAVACH_DETERMINISTIC_ENGINE (calculateDurationSeconds)',
-          value: waitSeconds,
-        },
-        {
-          description: `Remaining SLA for transit after merchant queue: ${Math.floor(feasibility.remainingSecondsForTransit / 60)} minutes`,
-          calculationSource: 'KAVACH_DETERMINISTIC_ENGINE (calculateSLAFeasibility)',
-          value: feasibility.remainingSecondsForTransit,
-        },
-        {
-          description: `Transit shortfall: ${Math.floor(feasibility.transitShortfallSeconds / 60)} minutes`,
-          calculationSource: 'KAVACH_DETERMINISTIC_ENGINE (calculateSLAFeasibility)',
-          value: feasibility.transitShortfallSeconds,
-        },
-      ],
+      evidenceIds: availableEvidenceIds,
+      calculatedFacts,
       interpretation: `The worker experienced ${Math.floor(waitSeconds / 60)} minutes of merchant delay, leaving only ${Math.floor(feasibility.remainingSecondsForTransit / 60)} minutes to complete delivery. Under standard transit conditions${trafficEvent ? ' and observed traffic disruptions' : ''}, timely delivery was physically infeasible through no fault of the worker.`,
       findings: [
         {
@@ -121,9 +198,9 @@ export class ForensicsAgent implements Agent<ForensicsAgentInput, ForensicsAnaly
           type: 'DECISION_REVIEW',
           severity: 'HIGH',
           title: 'Late delivery penalty warrants review due to merchant queue delay',
-          explanation: `Platform levied a ₹${platformClaim?.penaltyAmount || 350} penalty citing late delivery. Evidence confirms worker arrived at merchant at 19:02 but experienced ${Math.floor(waitSeconds / 60)} minutes of uncompensated merchant delay before package handover at 19:09, leaving insufficient SLA for delivery.`,
+          explanation: `Platform levied a ₹${platformClaim?.penaltyAmount || 350} penalty citing late delivery. Evidence confirms worker arrived at merchant at ${storeArrival?.timestamp || 'unknown'} but experienced ${Math.floor(waitSeconds / 60)} minutes of uncompensated merchant delay before package handover at ${packageReceived?.timestamp || 'unknown'}, leaving insufficient SLA for delivery.`,
           confidence: 0.94,
-          evidenceIds: gatheredEvidenceIds,
+          evidenceIds: availableEvidenceIds,
         },
       ],
       recommendedActions: [

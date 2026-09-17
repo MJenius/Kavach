@@ -32,38 +32,23 @@ export class MockAIService implements AIService {
     return `[Mock AI Response] Evaluated query: "${prompt}". Evidence indicates consistent timeline with merchant queue delay.`;
   }
 
- async investigateCase(_caseId: string): Promise<AIInvestigationResult> {
- return {
- summary:
- 'Investigation of trip late-delivery penalty indicates merchant preparation delay of 7 minutes was primary factor.',
- findings: [
- {
- id: 'finding-late-penalty-01',
- type: 'DECISION_REVIEW',
- severity: 'HIGH',
- title: 'Late delivery penalty warrants review due to merchant queue delay',
- explanation:
- 'Platform levied a ₹350 penalty citing late delivery. Evidence confirms worker arrived at merchant at 19:02 but experienced 7 minutes of uncompensated merchant delay before package handover at 19:09.',
- confidence: 0.94,
- evidenceIds: [
- 'ev-penalty-screenshot',
- 'ev-store-arrival-gps',
- 'ev-merchant-log',
- 'ev-merchant-handover-scan',
- 'ev-traffic-alert-koramangala',
- 'ev-wait-calc',
- ],
- },
- ],
- missingEvidence: ['Customer app delivery handover photo'],
- contradictions: ['Platform timestamp alleges dispatch at 19:04 vs merchant handover at 19:09'],
- recommendedActions: [
- 'Generate dispute package with store arrival GPS and merchant handover scan',
- 'Request waiver of ₹350 penalty based on uncredited merchant wait time',
- ],
- confidence: 0.94,
- };
- }
+  async investigateCase(caseId: string, contextData?: Record<string, unknown>): Promise<AIInvestigationResult> {
+    const workerId = (contextData?.workerId as string) || 'worker-vikram-01';
+    const supervisor = new SupervisorAgent();
+    const output = await supervisor.run({
+      caseId,
+      workerId,
+      tripId: caseId,
+      action: 'INVESTIGATE_CASE',
+      payload: contextData,
+    });
+
+    if (!output.investigationResult) {
+      throw new Error(`SupervisorAgent failed to produce an investigation result for case ${caseId}`);
+    }
+
+    return output.investigationResult;
+  }
 
  async extractDocumentData(documentUri: string): Promise<Record<string, unknown>> {
  const res = await this.extractDocument({ documentUri });

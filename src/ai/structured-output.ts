@@ -357,3 +357,6 @@ export function parseSafeJson<T>(
     };
   }
 }
+
+export function validateEvidenceIds(requestedIds: string[], availableIds: string[]): string[] { return requestedIds.filter(id => !availableIds.includes(id)); }
+

@@ -8,6 +8,7 @@ import {
   validateAIInvestigationResult,
   validateWorkerTwinResponse,
   parseSafeJson,
+  validateEvidenceIds,
 } from '../../src/ai/structured-output.ts';
 
 describe('Structured AI Output Validation', () => {
@@ -139,5 +140,16 @@ describe('Structured AI Output Validation', () => {
     const res = parseSafeJson('{ malformed', validateWorkerTwinResponse);
     expect(res.success).toBe(false);
     expect(res.error).toContain('Failed to parse JSON:');
+  });
+
+  it('validates evidence IDs against available evidence set', () => {
+    const available = ['ev-store-arrival-gps', 'ev-merchant-log', 'ev-wait-calc'];
+    const claimedWithFabricated = ['ev-store-arrival-gps', 'ev-fake-id-123', 'ev-wait-calc'];
+
+    const invalid = validateEvidenceIds(claimedWithFabricated, available);
+    expect(invalid).toEqual(['ev-fake-id-123']);
+
+    const allValid = ['ev-store-arrival-gps', 'ev-wait-calc'];
+    expect(validateEvidenceIds(allValid, available)).toEqual([]);
   });
 });

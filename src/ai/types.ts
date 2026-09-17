@@ -1,4 +1,5 @@
 import { Finding } from '../domain/index.ts';
+import type { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime';
 
 export interface TextGenerationRequest {
   prompt: string;
@@ -49,6 +50,7 @@ export interface AIServiceConfig {
   maxTokens?: number;
   temperature?: number;
   mockMode?: boolean;
+  client?: BedrockRuntimeClient;
 }
 
 export interface ForensicsAnalysisResult {

@@ -1,7 +1,10 @@
 import { Agent } from './index.ts';
 import { PolicyAnalysisResult } from '../ai/types.ts';
 import { validatePolicyAnalysis } from '../ai/structured-output.ts';
+import { BedrockAIService } from '../ai/bedrock.ts';
+import { POLICY_SYSTEM_PROMPT, generatePolicyUserPrompt } from '../prompts/policy.prompt.ts';
 import { getRelevantPolicy } from './tools/index.ts';
+import { getAgentRuntimeConfig } from './agent-config.ts';
 
 export interface PolicyAgentInput {
   platform: string;
@@ -11,6 +14,13 @@ export interface PolicyAgentInput {
 export class PolicyAgent implements Agent<PolicyAgentInput, PolicyAnalysisResult> {
   readonly name = 'PolicyAgent';
   readonly description = 'Retrieves and explains platform terms and SLAs without rendering legal advice or inventing citations.';
+
+  private bedrock: BedrockAIService | null;
+
+  constructor(bedrock?: BedrockAIService | null) {
+    const config = getAgentRuntimeConfig();
+    this.bedrock = bedrock ?? (config.useBedrock ? new BedrockAIService() : null);
+  }
 
   async run(input: PolicyAgentInput): Promise<PolicyAnalysisResult> {
     const policyResult = await getRelevantPolicy(input.platform, input.issueType);
@@ -30,6 +40,41 @@ export class PolicyAgent implements Agent<PolicyAgentInput, PolicyAnalysisResult
       return val.data || rawFallback;
     }
 
+    // If Bedrock is available, use AI for policy explanation
+    if (this.bedrock) {
+      try {
+        const userPrompt = generatePolicyUserPrompt({
+          platform: input.platform,
+          issueType: input.issueType,
+          availablePolicies: [policyResult.policy as unknown as Record<string, unknown>],
+        });
+
+        const result = await this.bedrock.generateStructured<PolicyAnalysisResult>({
+          prompt: userPrompt,
+          systemPrompt: POLICY_SYSTEM_PROMPT,
+          targetSchemaName: 'PolicyAnalysisResult',
+          validate: validatePolicyAnalysis,
+        });
+
+        if (result.success && result.data) {
+          // Force isLegalAdvice to false — never trust LLM for this
+          result.data.isLegalAdvice = false;
+          // Preserve the actual policy source
+          result.data.relevantRule = {
+            policyName: policyResult.policy.policyName,
+            clauseReference: policyResult.policy.clauseReference,
+            summaryText: policyResult.policy.summaryText,
+            sourceUri: policyResult.policy.sourceUri,
+          };
+          result.data.sourceUnavailable = false;
+          return result.data;
+        }
+      } catch {
+        // Fall through to deterministic path
+      }
+    }
+
+    // Deterministic path
     const rawResult: PolicyAnalysisResult = {
       platform: input.platform,
       issueType: input.issueType,

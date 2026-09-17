@@ -5,6 +5,7 @@ export * from './policy-agent.ts';
 export * from './worker-twin-agent.ts';
 export * from './supervisor-agent.ts';
 export * from './tools/index.ts';
+export * from './agent-config.ts';
 
 // Backward-compatible mock exports to preserve existing references in mock-server and tests
 export { SupervisorAgent as MockSupervisorAgent } from './supervisor-agent.ts';
