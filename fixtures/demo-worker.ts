@@ -224,7 +224,7 @@ export const demoEvidence: Evidence[] = [
     type: 'TRIP_EVENT',
     source: 'TRAFFIC_API',
     timestamp: '2026-09-15T19:16:00+05:30',
-    description: 'Road obstruction / heavy congestion reported on 80 Feet Road Koramangala.',
+    description: 'Road obstruction / heavy congestion reported on 80 Feet Road Koramangala. trafficDelaySeconds=360',
     confidence: 0.88,
   },
   {
