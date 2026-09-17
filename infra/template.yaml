@@ -1,0 +1,148 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Kavach AI - Independent Worker Intelligence and Protection Layer
+  Architecture Target: Amplify + Cognito + API Gateway + Lambda + DynamoDB + S3 + Step Functions + EventBridge + Bedrock (Ship It Track)
+
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: nodejs20.x
+    MemorySize: 512
+    Environment:
+      Variables:
+        STAGE: !Ref Stage
+        DYNAMODB_TABLE_PREFIX: !Sub '${AWS::StackName}-'
+        S3_EVIDENCE_BUCKET: !Ref EvidenceStorageBucket
+        BEDROCK_MODEL_ID: 'anthropic.claude-3-5-sonnet-20241022-v2:0'
+
+Parameters:
+  Stage:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+
+Resources:
+  # ============================================================================
+  # 1. AUTHENTICATION (Cognito) - Person 3
+  # ============================================================================
+  WorkerUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub '${AWS::StackName}-workers-${Stage}'
+      AutoVerifiedAttributes:
+        - phone_number
+      UsernameAttributes:
+        - phone_number
+
+  WorkerUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub '${AWS::StackName}-client-${Stage}'
+      UserPoolId: !Ref WorkerUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+
+  # ============================================================================
+  # 2. STORAGE (S3 Evidence Bucket + DynamoDB) - Person 3 & Person 2
+  # ============================================================================
+  EvidenceStorageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-evidence-${AWS::AccountId}-${AWS::Region}'
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST]
+            AllowedOrigins: ['*']
+
+  WorkerDataTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-workers-${Stage}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+
+  # ============================================================================
+  # 3. API GATEWAY & LAMBDA HANDLERS - Person 3
+  # ============================================================================
+  KavachApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Stage
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'"
+        AllowOrigin: "'*'"
+
+  ApiHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      CodeUri: ../src/api/
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref WorkerDataTable
+        - S3CrudPolicy:
+            BucketName: !Ref EvidenceStorageBucket
+      Events:
+        ApiRoot:
+          Type: Api
+          Properties:
+            RestApiId: !Ref KavachApi
+            Path: /{proxy+}
+            Method: ANY
+
+  # ============================================================================
+  # 4. STEP FUNCTIONS (Investigation & Dispute Workflow) - Person 3
+  # ============================================================================
+  CaseInvestigationStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub '${AWS::StackName}-case-investigation-${Stage}'
+      Definition:
+        Comment: "Kavach AI Case Investigation Workflow"
+        StartAt: IngestEvidence
+        States:
+          IngestEvidence:
+            Type: Pass
+            Result: "Evidence Ingested"
+            Next: RunSupervisorAgent
+          RunSupervisorAgent:
+            Type: Pass
+            Result: "Supervisor Completed"
+            Next: ReconcileDecision
+          ReconcileDecision:
+            Type: Pass
+            Result: "Decision Reconciled"
+            End: true
+
+  # ============================================================================
+  # 5. EVENTBRIDGE (Event Bus) - Person 3
+  # ============================================================================
+  KavachEventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Sub '${AWS::StackName}-bus-${Stage}'
+
+Outputs:
+  ApiEndpoint:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${KavachApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/"
+  EvidenceBucketName:
+    Description: "S3 Bucket for worker evidence"
+    Value: !Ref EvidenceStorageBucket
+  UserPoolId:
+    Description: "Cognito User Pool ID"
+    Value: !Ref WorkerUserPool
