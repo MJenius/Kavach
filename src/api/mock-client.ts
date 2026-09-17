@@ -159,10 +159,15 @@ export class HttpApiClient implements KavachApiClient {
   }
 }
 
-/**
- * Singleton client factory
- */
 export function createApiClient(): KavachApiClient {
-  // If running in browser or test without server, MockApiClient provides immediate resilience
+  const apiUrl =
+    (typeof process !== 'undefined' && process.env?.VITE_API_URL) ||
+    (typeof window !== 'undefined' && (window as any).__ENV__?.VITE_API_URL);
+
+  if (apiUrl) {
+    return new HttpApiClient(apiUrl);
+  }
+  // If running in browser or test without configured server, MockApiClient provides immediate resilience
   return new MockApiClient();
 }
+

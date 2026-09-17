@@ -15,11 +15,11 @@ export function getAgentRuntimeConfig(): AgentRuntimeConfig {
   if (cachedConfig) return cachedConfig;
 
   const useBedrock = process.env.MOCK_AI === 'false';
-  const modelId = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-5-sonnet-20241022-v2:0';
+  const modelId = process.env.BEDROCK_MODEL_ID || 'openai.gpt-oss-120b';
   const region = process.env.AWS_REGION || 'ap-south-1';
 
   let bedrockClient: BedrockRuntimeClient | null = null;
-  if (useBedrock) {
+  if (useBedrock && !modelId.startsWith('openai.')) {
     bedrockClient = new BedrockRuntimeClient({ region });
   }
 

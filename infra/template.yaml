@@ -6,21 +6,33 @@ Description: >
 
 Globals:
   Function:
-    Timeout: 30
+    Timeout: 60
     Runtime: nodejs20.x
-    MemorySize: 512
+    MemorySize: 1024
     Environment:
       Variables:
         STAGE: !Ref Stage
+        MOCK_AI: 'false'
+        MOCK_AWS: 'false'
+        AWS_REGION: !Sub '${AWS::Region}'
+        BEDROCK_MODEL_ID: !Ref BedrockModelId
+        BEDROCK_MANTLE_BASE_URL: !Ref BedrockMantleBaseUrl
         DYNAMODB_TABLE_PREFIX: !Sub '${AWS::StackName}-'
         S3_EVIDENCE_BUCKET: !Ref EvidenceStorageBucket
-        BEDROCK_MODEL_ID: 'anthropic.claude-3-5-sonnet-20241022-v2:0'
 
 Parameters:
   Stage:
     Type: String
     Default: dev
     AllowedValues: [dev, staging, prod]
+  BedrockModelId:
+    Type: String
+    Default: openai.gpt-oss-120b
+    Description: Primary Bedrock Mantle model ID
+  BedrockMantleBaseUrl:
+    Type: String
+    Default: https://bedrock-mantle.ap-south-1.api.aws/v1
+    Description: Bedrock Mantle OpenAI-compatible endpoint URL
 
 Resources:
   # ============================================================================
@@ -96,6 +108,12 @@ Resources:
             TableName: !Ref WorkerDataTable
         - S3CrudPolicy:
             BucketName: !Ref EvidenceStorageBucket
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:InvokeModelWithResponseStream
+              Resource: '*'
       Events:
         ApiRoot:
           Type: Api

@@ -30,9 +30,15 @@ describe('AIService Abstraction & Bedrock Adapter', () => {
     delete process.env.AWS_ACCESS_KEY_ID;
     delete process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI;
 
-    const bedrock = new BedrockAIService({ modelId: 'anthropic.claude-3v2' });
-    await expect(bedrock.generateText('Test')).rejects.toThrow('requires AWS credentials');
+    // Test Claude provider credentials check
+    const bedrockClaude = new BedrockAIService({ provider: 'bedrock-claude', modelId: 'anthropic.claude-3v2' });
+    await expect(bedrockClaude.generateText('Test')).rejects.toThrow('requires AWS credentials');
+
+    // Test Mantle provider failure on invalid/missing auth
+    const bedrockMantle = new BedrockAIService({ provider: 'mantle', modelId: 'openai.gpt-oss-120b', apiKey: 'invalid-key' });
+    await expect(bedrockMantle.generateText('Test')).rejects.toThrow('Bedrock Mantle invocation failed');
   });
+
 
   it('BedrockAIService.investigateCase delegates directly to SupervisorAgent', async () => {
     const bedrock = new BedrockAIService({ modelId: 'anthropic.claude-3v2' });

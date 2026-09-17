@@ -96,24 +96,40 @@ export class MockAIService implements AIService {
  }
 }
 
+import { BedrockMantleAIService } from './bedrock-mantle.ts';
+
 /**
  * BedrockAIServiceAdapter implements AIService using Amazon Bedrock.
+ * Uses BedrockMantleAIService (OpenAI-compatible Responses API on ap-south-1)
+ * as the primary production provider, while keeping Claude BedrockRuntime available.
  */
 export class BedrockAIService implements AIService {
-  private bedrock: BedrockRuntime;
+  private runtime: BedrockRuntime | BedrockMantleAIService;
 
   constructor(config?: AIServiceConfig) {
-    this.bedrock = new BedrockRuntime(config);
+    const provider =
+      config?.provider ||
+      process.env.BEDROCK_PROVIDER ||
+      (process.env.BEDROCK_MANTLE_BASE_URL || (process.env.BEDROCK_MODEL_ID && process.env.BEDROCK_MODEL_ID.startsWith('openai.'))
+        ? 'mantle'
+        : 'mantle'); // Mantle is the primary production provider
+
+    if (provider === 'bedrock-claude') {
+      this.runtime = new BedrockRuntime(config);
+    } else {
+      this.runtime = new BedrockMantleAIService(config);
+    }
   }
 
   async generateText(promptOrReq: string | TextGenerationRequest): Promise<string> {
-    const res = await this.bedrock.generateText(promptOrReq);
+    const res = await this.runtime.generateText(promptOrReq);
     return res.text;
   }
 
   async investigateCase(caseId: string, contextData?: Record<string, unknown>): Promise<AIInvestigationResult> {
     // In production/Bedrock mode, investigations execute through SupervisorAgent,
     // coordinating Forensics, Earnings, and Policy agents over real tools.
+    // If Bedrock invocation fails in production, an error is thrown (do NOT silently fall back to Mock).
     const workerId = (contextData?.workerId as string) || 'worker-vikram-01';
     const supervisor = new SupervisorAgent();
     const output = await supervisor.run({
@@ -146,16 +162,17 @@ export class BedrockAIService implements AIService {
   }
 
   async extractDocument(request: DocumentExtractionRequest): Promise<DocumentExtractionResult> {
-    return this.bedrock.extractDocument(request);
+    return this.runtime.extractDocument(request);
   }
 
   async generateStructured<T>(request: StructuredGenerationRequest<T>): Promise<ValidationResult<T>> {
-    return this.bedrock.generateStructured(request);
+    return this.runtime.generateStructured(request);
   }
 }
 
 /**
  * Factory helper to obtain configured AI service instance based on environment.
+ * If MOCK_AI=false, Bedrock is strictly used.
  */
 export function getAIService(config?: AIServiceConfig): AIService {
   if (config?.mockMode === true || process.env.MOCK_AI !== 'false') {
@@ -163,3 +180,4 @@ export function getAIService(config?: AIServiceConfig): AIService {
   }
   return new BedrockAIService(config);
 }
+

@@ -44,13 +44,23 @@ export interface StructuredGenerationRequest<T = unknown> {
   validate?: (data: unknown) => { success: boolean; data?: T; error?: string };
 }
 
+export interface BedrockLLMProvider {
+  modelId: string;
+  generateText(request: TextGenerationRequest | string): Promise<TextGenerationResponse>;
+  generateStructured<T>(request: StructuredGenerationRequest<T>): Promise<any>;
+  extractDocument(request: DocumentExtractionRequest): Promise<DocumentExtractionResult>;
+}
+
 export interface AIServiceConfig {
   region?: string;
   modelId?: string;
   maxTokens?: number;
   temperature?: number;
   mockMode?: boolean;
-  client?: BedrockRuntimeClient;
+  client?: BedrockRuntimeClient | any;
+  provider?: 'mantle' | 'bedrock-claude';
+  baseURL?: string;
+  apiKey?: string;
 }
 
 export interface ForensicsAnalysisResult {

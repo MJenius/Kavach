@@ -17,6 +17,12 @@
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1134.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.1134.0",
+    "@aws-sdk/client-dynamodb": "^3.1134.0",
+    "@aws-sdk/client-s3": "^3.1134.0",
+    "@aws-sdk/lib-dynamodb": "^3.1134.0",
+    "@types/aws-lambda": "^8.10.163",
+    "openai": "^7.17.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.2"
