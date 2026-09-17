@@ -14,7 +14,6 @@ Globals:
         STAGE: !Ref Stage
         MOCK_AI: 'false'
         MOCK_AWS: 'false'
-        AWS_REGION: !Sub '${AWS::Region}'
         BEDROCK_MODEL_ID: !Ref BedrockModelId
         BEDROCK_MANTLE_BASE_URL: !Ref BedrockMantleBaseUrl
         DYNAMODB_TABLE_PREFIX: !Sub '${AWS::StackName}-'
