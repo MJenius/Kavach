@@ -110,11 +110,12 @@ export class HttpApiClient implements KavachApiClient {
   private baseUrl: string;
 
   constructor(baseUrl?: string) {
-    this.baseUrl = baseUrl || 'http://localhost:3001/api';
+    this.baseUrl = (baseUrl || 'http://localhost:3001/api').replace(/\/+$/, '');
   }
 
   private async fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    const res = await fetch(`${this.baseUrl}${cleanPath}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -160,7 +161,7 @@ export class HttpApiClient implements KavachApiClient {
   async investigateTrip(tripId: string): Promise<AIInvestigationResult> {
     return this.fetchJson<AIInvestigationResult>(`/investigations`, {
       method: 'POST',
-      body: JSON.stringify({ tripId }),
+      body: JSON.stringify({ tripId, workerId: 'worker-vikram-01' }),
     });
   }
 
@@ -180,8 +181,12 @@ export class HttpApiClient implements KavachApiClient {
 
 export function createApiClient(): KavachApiClient {
   const apiUrl =
-    (typeof process !== 'undefined' && process.env?.VITE_API_URL) ||
-    (typeof window !== 'undefined' && (window as any).__ENV__?.VITE_API_URL);
+    (typeof import.meta !== 'undefined' &&
+      ((import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL)) ||
+    (typeof process !== 'undefined' &&
+      (process.env?.VITE_API_BASE_URL || process.env?.VITE_API_URL)) ||
+    (typeof window !== 'undefined' &&
+      ((window as any).__ENV__?.VITE_API_BASE_URL || (window as any).__ENV__?.VITE_API_URL));
 
   if (apiUrl) {
     return new HttpApiClient(apiUrl);
