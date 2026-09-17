@@ -1,5 +1,6 @@
-import { Evidence } from '../domain/index.ts';
-import { demoEvidence } from '../../fixtures/demo-worker.ts';
+import { Evidence, Finding, TripEvent } from '../domain/index.ts';
+import { demoEvidence, demoFindings, demoTripEvents } from '../../fixtures/demo-worker.ts';
+import { EvidenceGraph, EvidenceRelationship } from './graph.ts';
 
 /**
  * Interface for Evidence Storage abstraction (Section 33).
@@ -17,11 +18,18 @@ export interface EvidenceStore {
  */
 export class LocalEvidenceStore implements EvidenceStore {
   private items = new Map<string, Evidence>();
+  readonly graph: EvidenceGraph;
 
-  constructor(initialData: Evidence[] = demoEvidence) {
+  constructor(
+    initialData: Evidence[] = demoEvidence,
+    findings: Finding[] = demoFindings,
+    private tripEvents: TripEvent[] = demoTripEvents,
+    relationships: EvidenceRelationship[] = []
+  ) {
     for (const item of initialData) {
       this.items.set(item.id, item);
     }
+    this.graph = new EvidenceGraph(initialData, findings, relationships);
   }
 
   async getEvidence(id: string): Promise<Evidence | null> {
@@ -34,10 +42,27 @@ export class LocalEvidenceStore implements EvidenceStore {
 
   async saveEvidence(evidence: Evidence): Promise<void> {
     this.items.set(evidence.id, evidence);
+    this.graph.addEvidence(evidence);
   }
 
   async listEvidenceByIds(ids: string[]): Promise<Evidence[]> {
     return ids.map((id) => this.items.get(id)).filter((item): item is Evidence => item !== undefined);
+  }
+
+  async getEvidenceForTrip(tripId: string): Promise<Evidence[]> {
+    return this.graph.getEvidenceForTrip(tripId, this.tripEvents);
+  }
+
+  async getEvidenceForFinding(findingId: string): Promise<Evidence[]> {
+    return this.graph.getEvidenceForFinding(findingId);
+  }
+
+  async getSupportingEvidence(id: string): Promise<Evidence[]> {
+    return this.graph.getSupportingEvidence(id);
+  }
+
+  async getContradictingEvidence(id: string): Promise<Evidence[]> {
+    return this.graph.getContradictingEvidence(id);
   }
 }
 
