@@ -43,7 +43,7 @@ Resources:
     Properties:
       UserPoolName: !Sub '${AWS::StackName}-workers-${Stage}'
       AutoVerifiedAttributes:
-        - phone_number
+        - email
       UsernameAttributes:
         - phone_number
 
