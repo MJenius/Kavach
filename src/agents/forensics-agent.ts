@@ -201,12 +201,12 @@ export class ForensicsAgent implements Agent<ForensicsAgentInput, ForensicsAnaly
           title: 'Late delivery penalty warrants review due to merchant queue delay',
           explanation: `Platform levied a ₹${platformClaim?.penaltyAmount || 350} penalty citing late delivery. Evidence confirms worker arrived at merchant at ${storeArrival?.timestamp || 'unknown'} but experienced ${Math.floor(waitSeconds / 60)} minutes of uncompensated merchant delay before package handover at ${packageReceived?.timestamp || 'unknown'}, leaving insufficient SLA for delivery.`,
           confidence: 0.94,
-          evidenceIds: availableEvidenceIds,
+          evidenceIds: availableEvidenceIds.filter((id) => id !== 'ev-penalty-screenshot'),
         },
       ],
       recommendedActions: [
-        'Generate dispute package with store arrival GPS and merchant handover scan',
-        `Request waiver of ₹${platformClaim?.penaltyAmount || 350} penalty based on uncredited merchant wait time`,
+        'Available evidence indicates uncompensated merchant delay; recommend submitting dispute package with GPS arrival and scan telemetry',
+        `Request platform administrative re-evaluation of ₹${platformClaim?.penaltyAmount || 350} penalty based on uncredited merchant wait time`,
       ],
       confidence: 0.94,
     };

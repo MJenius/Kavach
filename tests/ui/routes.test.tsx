@@ -6,6 +6,7 @@ import { App } from '../../src/app/App.tsx';
 describe('UI Route & Page Rendering Verification', () => {
   const routes = [
     { path: '/', expectedText: 'Worker Overview' },
+    { path: '/dashboard', expectedText: 'Worker Overview' },
     { path: '/earnings', expectedText: 'Earnings Reconciliation' },
     { path: '/evidence', expectedText: 'Worker Evidence Graph' },
     { path: '/investigation', expectedText: 'Trip Forensics' },

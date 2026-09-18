@@ -88,7 +88,15 @@ export class SupervisorAgent implements Agent<SupervisorInput, SupervisorOutput>
     // 2. Earnings
     agentResults.earnings = earningsRes;
     for (const f of earningsRes.findings) {
-      if (!findings.some((existing) => existing.id === f.id)) {
+      if (
+        f.evidenceIds &&
+        f.evidenceIds.length > 0 &&
+        !findings.some(
+          (existing) =>
+            existing.id === f.id ||
+            (existing.id === 'finding-late-penalty-01' && f.type === 'PAYOUT_DISCREPANCY')
+        )
+      ) {
         findings.push(f);
       }
     }

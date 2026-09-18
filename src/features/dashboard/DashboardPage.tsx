@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { loadDemoDataset } from '../../../fixtures/demo-worker.ts';
 
 export const DashboardPage: React.FC = () => {
@@ -45,7 +46,9 @@ export const DashboardPage: React.FC = () => {
           <div style={{ fontSize: '1.75rem', fontWeight: 700, margin: '0.25rem 0', color: 'var(--accent-warning)' }}>
             ₹{data.summary.discrepancyTotal.toLocaleString('en-IN')} Impact
           </div>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{data.cases.length} cases ready for review</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+            ₹350 evidence dispute • ₹300 ledger shortfall ({data.cases.length} cases)
+          </div>
         </div>
       </div>
 
@@ -71,8 +74,8 @@ export const DashboardPage: React.FC = () => {
               {primaryFinding.explanation}
             </p>
           </div>
-          <a
-            href="/investigation"
+          <Link
+            to="/investigation"
             style={{
               background: 'var(--accent-warning)',
               color: '#000',
@@ -81,10 +84,11 @@ export const DashboardPage: React.FC = () => {
               borderRadius: '6px',
               fontSize: '0.85rem',
               whiteSpace: 'nowrap',
+              textDecoration: 'none',
             }}
           >
             Review Evidence
-          </a>
+          </Link>
         </div>
       )}
     </div>

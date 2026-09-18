@@ -78,7 +78,7 @@ export const EvidencePage: React.FC = () => {
       time: '19:16 IST',
       type: 'TRIP_EVENT',
       source: 'TRAFFIC_API',
-      impact: 'Road obstruction of 360 seconds on 80 Feet Road Koramangala',
+      impact: 'Traffic delay of 6 minutes (360s) due to road obstruction on 80 Feet Road Koramangala',
       relationship: 'SUPPORTS',
     },
     {
@@ -141,9 +141,11 @@ export const EvidencePage: React.FC = () => {
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--accent-warning)' }}>
-              {supportingEvidence.length} Nodes Linked
+              {supportingEvidence.length} Supporting Nodes Linked
             </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Provenanced in Graph</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              1 Contested Claim • {data.evidence.length} Total Evidence Items in Graph
+            </div>
           </div>
         </div>
 

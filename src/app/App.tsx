@@ -13,6 +13,7 @@ export const App: React.FC = () => {
     <AppShell>
       <Routes>
         <Route path="/" element={<DashboardPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/earnings" element={<EarningsPage />} />
         <Route path="/evidence" element={<EvidencePage />} />
         <Route path="/investigation" element={<InvestigationPage />} />

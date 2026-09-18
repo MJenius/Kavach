@@ -83,7 +83,8 @@ export class EarningsAgent implements Agent<EarningsAgentInput, EarningsAnalysis
       const comp = compareExpectedActual(inc.expectedAmount || 0, inc.actualAmount || 0);
       const incRecon = reconcileIncentive(inc.expectedAmount, inc.actualAmount, true);
       if (comp.hasDiscrepancy) {
-        const relatedEvidenceIds = availableEvidenceIds.filter((id) => id.includes('penalty') || id.includes('incentive'));
+        // Strictly attach only genuine incentive evidence; never attach unrelated penalty evidence
+        const relatedEvidenceIds = availableEvidenceIds.filter((id) => id.includes('incentive'));
         discrepancies.push({
           type: 'INCENTIVE_SHORTFALL',
           expected: inc.expectedAmount || 0,
@@ -93,15 +94,18 @@ export class EarningsAgent implements Agent<EarningsAgentInput, EarningsAnalysis
           evidenceIds: relatedEvidenceIds,
         });
 
-        findings.push({
-          id: 'finding-incentive-02',
-          type: 'INCENTIVE_DISCREPANCY',
-          severity: 'MEDIUM',
-          title: `Surge incentive shortfall of ₹${comp.difference} detected`,
-          explanation: `Target completed according to trip logs, but incentive payout was credited at ₹${inc.actualAmount} instead of expected ₹${inc.expectedAmount}.`,
-          confidence: 0.91,
-          evidenceIds: relatedEvidenceIds,
-        });
+        // Only create an evidence-backed finding if genuine evidence exists
+        if (relatedEvidenceIds.length > 0) {
+          findings.push({
+            id: 'finding-incentive-02',
+            type: 'INCENTIVE_DISCREPANCY',
+            severity: 'MEDIUM',
+            title: `Surge incentive shortfall of ₹${comp.difference} detected`,
+            explanation: `Target completed according to trip logs, but incentive payout was credited at ₹${inc.actualAmount} instead of expected ₹${inc.expectedAmount}.`,
+            confidence: 0.91,
+            evidenceIds: relatedEvidenceIds,
+          });
+        }
       }
     }
 

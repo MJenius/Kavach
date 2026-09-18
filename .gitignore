@@ -23,3 +23,4 @@ Thumbs.db
 
 # SAM / AWS build artifacts
 .aws-sam/
+.kilo/

@@ -190,7 +190,7 @@ export const demoEvidence: Evidence[] = [
     id: 'ev-penalty-screenshot',
     type: 'SCREENSHOT',
     source: 'WORKER_UPLOAD',
-    timestamp: '2026-09-15T19:35:00+05:30',
+    timestamp: '2026-09-15T19:30:00+05:30',
     uri: 's3://kavach-evidence-bucket/vikram/2026-09-15/penalty_screenshot.png',
     description: 'Platform notification screen showing late-delivery penalty of ₹350.',
     confidence: 0.99,
@@ -255,23 +255,13 @@ export const demoFindings: Finding[] = [
       'Platform levied a ₹350 penalty citing late delivery. Evidence confirms worker arrived at merchant at 19:02 but experienced 7 minutes of uncompensated merchant delay before package handover at 19:09, leaving insufficient SLA for delivery.',
     confidence: 0.94,
     evidenceIds: [
-      'ev-penalty-screenshot',
       'ev-store-arrival-gps',
       'ev-merchant-log',
       'ev-merchant-handover-scan',
-      'ev-traffic-alert-koramangala',
       'ev-wait-calc',
+      'ev-traffic-alert-koramangala',
+      'ev-customer-delivery-otp',
     ],
-  },
-  {
-    id: 'finding-incentive-02',
-    type: 'INCENTIVE_DISCREPANCY',
-    severity: 'MEDIUM',
-    title: 'Surge incentive shortfall of ₹300 detected',
-    explanation:
-      'Target of 12 peak-hour trips completed according to trip logs, but incentive payout was credited at ₹200 instead of expected ₹500.',
-    confidence: 0.91,
-    evidenceIds: ['ev-penalty-screenshot'],
   },
 ];
 
@@ -289,7 +279,7 @@ export const demoCases: Case[] = [
     workerId: 'worker-vikram-01',
     type: 'PAYOUT',
     status: 'REVIEW',
-    findingIds: ['finding-incentive-02'],
+    findingIds: [],
     createdAt: '2026-09-15T22:30:00+05:30',
   },
 ];
@@ -321,7 +311,13 @@ export function loadDemoDataset(): DemoDataset {
   const totalExpenses = demoExpenses.reduce((acc, curr) => acc + curr.amount, 0);
   const netEarnings = grossEarnings - totalExpenses;
   const effectiveHourlyRate = Math.round((netEarnings / 53) * 100) / 100; // 53 active hours
-  const discrepancyTotal = 350 + (500 - 200); // 350 penalty + 300 incentive shortfall
+  const penaltyDiscrepancy = demoEarnings
+    .filter((e) => e.type === 'PENALTY')
+    .reduce((acc, curr) => acc + Math.abs(curr.actualAmount || 0), 0);
+  const incentiveDiscrepancy = demoEarnings
+    .filter((e) => e.type === 'INCENTIVE')
+    .reduce((acc, curr) => acc + Math.max(0, (curr.expectedAmount || 0) - (curr.actualAmount || 0)), 0);
+  const discrepancyTotal = penaltyDiscrepancy + incentiveDiscrepancy; // 350 penalty + 300 incentive shortfall = 650
 
   return {
     worker: demoWorker,

@@ -229,10 +229,27 @@ export const InvestigationPage: React.FC<InvestigationPageProps> = ({ apiClient 
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
           <div style={{ flex: 1, minWidth: '280px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
               <span className="badge badge-danger">PLATFORM CLAIM: ₹{penaltyAmount} PENALTY</span>
+              <button
+                data-testid="evidence-chip-ev-penalty-screenshot"
+                onClick={() => setSelectedEvidenceId('ev-penalty-screenshot')}
+                style={{
+                  fontSize: '0.75rem',
+                  padding: '0.15rem 0.5rem',
+                  borderRadius: '4px',
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  color: '#fca5a5',
+                  fontFamily: 'monospace',
+                  cursor: 'pointer',
+                }}
+                title="Inspect platform penalty notice screenshot"
+              >
+                Inspect Notice [ev-penalty-screenshot]
+              </button>
               <span className="badge badge-warning">
-                {investigation ? 'AI ANALYSIS: REVIEW RECOMMENDED' : 'STATUS: DISCREPANCY DETECTED'}
+                {investigation ? 'AI ANALYSIS: WARRANTS REVIEW' : 'STATUS: DISCREPANCY DETECTED'}
               </span>
             </div>
             <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>
@@ -279,7 +296,7 @@ export const InvestigationPage: React.FC<InvestigationPageProps> = ({ apiClient 
           <div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Transit Feasibility</div>
             <div style={{ fontSize: '1.25rem', fontWeight: 700, color: slaFeasibility.isFeasible ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
-              {slaFeasibility.isFeasible ? 'Feasible' : 'Unfeasible'}
+              {slaFeasibility.isFeasible ? 'Feasible' : `${slaFeasibility.feasibility} (Infeasible)`}
             </div>
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
               Deficit: {Math.floor(slaFeasibility.transitShortfallSeconds / 60)} min
