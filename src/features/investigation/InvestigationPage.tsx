@@ -5,6 +5,7 @@ import { calculateSLAFeasibility } from '../../calculations/index.ts';
 import { createApiClient } from '../../api/mock-client.ts';
 import type { AIInvestigationResult } from '../../domain/index.ts';
 import type { ReviewPackageNavigationState } from '../cases/review-package.ts';
+import { EvidenceInspector } from '../../components/EvidenceInspector.tsx';
 
 /**
  * Format ISO timestamp to 24-hr Indian Standard Time (HH:mm IST) consistently
@@ -25,6 +26,7 @@ export const InvestigationPage: React.FC = () => {
   const primaryTrip = data.trips[0];
 
   const [investigation, setInvestigation] = useState<AIInvestigationResult | null>(null);
+  const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [generatingPackage, setGeneratingPackage] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -345,8 +347,10 @@ export const InvestigationPage: React.FC = () => {
                     Supporting Evidence:
                   </span>
                   {finding.evidenceIds.map((evId) => (
-                    <span
+                    <button
                       key={evId}
+                      data-testid={`evidence-chip-${evId}`}
+                      onClick={() => setSelectedEvidenceId(evId)}
                       style={{
                         fontSize: '0.75rem',
                         padding: '0.2rem 0.5rem',
@@ -355,10 +359,12 @@ export const InvestigationPage: React.FC = () => {
                         border: '1px solid rgba(59, 130, 246, 0.3)',
                         color: '#93c5fd',
                         fontFamily: 'monospace',
+                        cursor: 'pointer',
                       }}
+                      title="Inspect evidence provenance"
                     >
                       {evId}
-                    </span>
+                    </button>
                   ))}
                 </div>
               )}
@@ -452,6 +458,12 @@ export const InvestigationPage: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {/* Reusable Evidence Inspector Drawer */}
+      <EvidenceInspector
+        evidenceId={selectedEvidenceId}
+        onClose={() => setSelectedEvidenceId(null)}
+      />
     </div>
   );
 };

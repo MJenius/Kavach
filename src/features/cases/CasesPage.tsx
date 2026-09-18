@@ -5,6 +5,7 @@ import {
   generateReviewPackage,
   type ReviewPackageNavigationState,
 } from './review-package.ts';
+import { EvidenceInspector } from '../../components/EvidenceInspector.tsx';
 
 /**
  * Format ISO timestamp to 24-hr Indian Standard Time (HH:mm IST) consistently
@@ -25,6 +26,7 @@ function formatTimeIST(iso: string): string {
 export const CasesPage: React.FC = () => {
   const data = loadDemoDataset();
   const location = useLocation();
+  const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
   const [generatedUri, setGeneratedUri] = useState<string | null>(null);
   const [copyStatus, setCopyStatus] = useState<'IDLE' | 'COPIED' | 'FALLBACK'>('IDLE');
   const [packageText, setPackageText] = useState<string>('');
@@ -251,8 +253,10 @@ export const CasesPage: React.FC = () => {
                         Supporting Evidence IDs:
                       </span>
                       {f.evidenceIds.map((evId) => (
-                        <span
+                        <button
                           key={evId}
+                          data-testid={`case-evidence-chip-${evId}`}
+                          onClick={() => setSelectedEvidenceId(evId)}
                           style={{
                             fontSize: '0.75rem',
                             padding: '0.15rem 0.5rem',
@@ -261,10 +265,12 @@ export const CasesPage: React.FC = () => {
                             border: '1px solid rgba(59, 130, 246, 0.3)',
                             color: '#93c5fd',
                             fontFamily: 'monospace',
+                            cursor: 'pointer',
                           }}
+                          title="Inspect evidence provenance"
                         >
                           {evId}
-                        </span>
+                        </button>
                       ))}
                     </div>
                   )}
@@ -414,6 +420,12 @@ export const CasesPage: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {/* Reusable Evidence Inspector Drawer */}
+      <EvidenceInspector
+        evidenceId={selectedEvidenceId}
+        onClose={() => setSelectedEvidenceId(null)}
+      />
     </div>
   );
 };
