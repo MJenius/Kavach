@@ -1,7 +1,8 @@
 import { Agent } from './index.ts';
 import { PolicyAnalysisResult } from '../ai/types.ts';
 import { validatePolicyAnalysis } from '../ai/structured-output.ts';
-import { BedrockAIService } from '../ai/bedrock.ts';
+import { BedrockMantleAIService } from '../ai/bedrock-mantle.ts';
+import type { BedrockLLMProvider } from '../ai/types.ts';
 import { POLICY_SYSTEM_PROMPT, generatePolicyUserPrompt } from '../prompts/policy.prompt.ts';
 import { getRelevantPolicy } from './tools/index.ts';
 import { getAgentRuntimeConfig } from './agent-config.ts';
@@ -15,11 +16,11 @@ export class PolicyAgent implements Agent<PolicyAgentInput, PolicyAnalysisResult
   readonly name = 'PolicyAgent';
   readonly description = 'Retrieves and explains platform terms and SLAs without rendering legal advice or inventing citations.';
 
-  private bedrock: BedrockAIService | null;
+  private bedrock: BedrockLLMProvider | null;
 
-  constructor(bedrock?: BedrockAIService | null) {
+  constructor(bedrock?: BedrockLLMProvider | null) {
     const config = getAgentRuntimeConfig();
-    this.bedrock = bedrock ?? (config.useBedrock ? new BedrockAIService() : null);
+    this.bedrock = bedrock ?? (config.useBedrock ? new BedrockMantleAIService() : null);
   }
 
   async run(input: PolicyAgentInput): Promise<PolicyAnalysisResult> {

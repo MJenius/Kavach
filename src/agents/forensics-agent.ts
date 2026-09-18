@@ -1,7 +1,8 @@
 import { Agent } from './index.ts';
 import { ForensicsAnalysisResult } from '../ai/types.ts';
 import { validateForensicsAnalysis, validateEvidenceIds } from '../ai/structured-output.ts';
-import { BedrockAIService } from '../ai/bedrock.ts';
+import { BedrockMantleAIService } from '../ai/bedrock-mantle.ts';
+import type { BedrockLLMProvider } from '../ai/types.ts';
 import { FORENSICS_SYSTEM_PROMPT, generateForensicsUserPrompt } from '../prompts/forensics.prompt.ts';
 import {
   getTrip,
@@ -22,11 +23,11 @@ export class ForensicsAgent implements Agent<ForensicsAgentInput, ForensicsAnaly
   readonly name = 'ForensicsAgent';
   readonly description = 'Reconstructs delivery timeline, assesses feasibility with deterministic math, and produces evidence-backed Findings.';
 
-  private bedrock: BedrockAIService | null;
+  private bedrock: BedrockLLMProvider | null;
 
-  constructor(bedrock?: BedrockAIService | null) {
+  constructor(bedrock?: BedrockLLMProvider | null) {
     const config = getAgentRuntimeConfig();
-    this.bedrock = bedrock ?? (config.useBedrock ? new BedrockAIService() : null);
+    this.bedrock = bedrock ?? (config.useBedrock ? new BedrockMantleAIService() : null);
   }
 
   async run(input: ForensicsAgentInput): Promise<ForensicsAnalysisResult> {

@@ -1,12 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { loadDemoDataset } from '../../../fixtures/demo-worker.ts';
 import { calculateSLAFeasibility } from '../../calculations/index.ts';
+import { createApiClient } from '../../api/mock-client.ts';
+import type { AIInvestigationResult } from '../../domain/index.ts';
+import type { ReviewPackageNavigationState } from '../cases/review-package.ts';
+import { EvidenceInspector } from '../../components/EvidenceInspector.tsx';
 
 /**
  * Format ISO timestamp to 24-hr Indian Standard Time (HH:mm IST) consistently
  */
 function formatTimeIST(iso: string): string {
-  // Parse date and explicitly format in Asia/Kolkata timezone
   return new Intl.DateTimeFormat('en-IN', {
     hour: '2-digit',
     minute: '2-digit',
@@ -16,9 +20,16 @@ function formatTimeIST(iso: string): string {
 }
 
 export const InvestigationPage: React.FC = () => {
+  const navigate = useNavigate();
   const data = loadDemoDataset();
   const primaryFinding = data.findings[0];
   const primaryTrip = data.trips[0];
+
+  const [investigation, setInvestigation] = useState<AIInvestigationResult | null>(null);
+  const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [generatingPackage, setGeneratingPackage] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Dynamic calculations derived from events rather than hardcoded
   const waitEvent = data.tripEvents.find((e) => e.type === 'WAITING_STARTED');
@@ -37,14 +48,157 @@ export const InvestigationPage: React.FC = () => {
   const penaltyRecord = data.earnings.find((e) => e.type === 'PENALTY');
   const penaltyAmount = Math.abs(penaltyRecord?.actualAmount || 350);
 
+  const runInvestigation = async (): Promise<AIInvestigationResult> => {
+    const client = createApiClient();
+    const result = await client.investigateTrip(primaryTrip.id);
+    setInvestigation(result);
+    return result;
+  };
+
+  const handleStartInvestigation = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await runInvestigation();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenerateReviewPackage = async () => {
+    setGeneratingPackage(true);
+    setError(null);
+    try {
+      let activeResult = investigation;
+      if (!activeResult) {
+        setLoading(true);
+        activeResult = await runInvestigation();
+        setLoading(false);
+      }
+
+      const navState: ReviewPackageNavigationState = {
+        type: 'generated-review-package',
+        caseId: `case-${primaryTrip.id}`,
+        tripId: primaryTrip.id,
+        workerId: data.worker.id,
+        workerName: data.worker.name,
+        disputedAmount: penaltyAmount,
+        caseStatus: 'READY',
+        investigation: activeResult,
+        timeline: data.tripEvents.filter((e) => e.tripId === primaryTrip.id),
+      };
+
+      navigate('/cases', { state: navState });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGeneratingPackage(false);
+    }
+  };
+
+  const activeFindings = investigation?.findings || [primaryFinding];
+  const overallConfidence = investigation?.confidence ?? primaryFinding.confidence;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <div>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>Trip Forensics & Discrepancy Investigation</h2>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-          Reconstruction of trip timeline and evaluation of platform claims for Trip {primaryTrip.id}.
-        </p>
+      {/* Header and Live Investigation Trigger */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>Trip Forensics & Discrepancy Investigation</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+            Multi-agent reconstruction of trip timeline, earnings discrepancies, and platform claims for Trip {primaryTrip.id}.
+          </p>
+        </div>
+        <button
+          onClick={handleStartInvestigation}
+          disabled={loading}
+          style={{
+            background: loading ? 'var(--bg-surface-hover)' : 'var(--primary)',
+            color: '#fff',
+            border: 'none',
+            padding: '0.65rem 1.25rem',
+            borderRadius: '6px',
+            fontWeight: 600,
+            cursor: loading ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            fontSize: '0.9rem',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+          }}
+        >
+          {loading ? (
+            <>
+              <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>⏳</span>
+              Investigating with AI Agents...
+            </>
+          ) : investigation ? (
+            'Re-run Live Investigation'
+          ) : (
+            'Start Live AI Investigation'
+          )}
+        </button>
       </div>
+
+      {/* Loading State Banner */}
+      {loading && (
+        <div
+          style={{
+            background: 'rgba(59, 130, 246, 0.1)',
+            border: '1px solid var(--primary)',
+            borderRadius: '8px',
+            padding: '1.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '1rem',
+          }}
+        >
+          <div style={{ fontSize: '1.5rem' }}>🤖</div>
+          <div>
+            <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.2rem' }}>
+              Supervisor Agent Orchestration in Progress
+            </div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              Executing Forensics Agent (telemetry math), Earnings Agent (reconciliation), and Policy Agent (QuickBite terms) via AWS Bedrock Mantle...
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error Alert */}
+      {error && (
+        <div
+          style={{
+            background: 'rgba(239, 68, 68, 0.15)',
+            border: '1px solid var(--accent-danger)',
+            borderRadius: '8px',
+            padding: '1rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <div style={{ color: 'var(--accent-danger)', fontSize: '0.9rem' }}>
+            <strong>Investigation Error:</strong> {error}
+          </div>
+          <button
+            onClick={handleStartInvestigation}
+            style={{
+              background: 'var(--accent-danger)',
+              color: '#fff',
+              border: 'none',
+              padding: '0.4rem 0.8rem',
+              borderRadius: '4px',
+              fontSize: '0.8rem',
+              cursor: 'pointer',
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Primary Magic Moment Box (Section 46) */}
       <div
@@ -55,22 +209,26 @@ export const InvestigationPage: React.FC = () => {
           padding: '1.5rem',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ flex: 1, minWidth: '280px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
               <span className="badge badge-danger">PLATFORM CLAIM: ₹{penaltyAmount} PENALTY</span>
-              <span className="badge badge-warning">STATUS: DISCREPANCY DETECTED</span>
+              <span className="badge badge-warning">
+                {investigation ? 'AI ANALYSIS: REVIEW RECOMMENDED' : 'STATUS: DISCREPANCY DETECTED'}
+              </span>
             </div>
-            <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>{primaryFinding.title}</h3>
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', maxWidth: '800px' }}>
-              {primaryFinding.explanation}
+            <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>
+              {investigation ? 'Multi-Agent Investigation Synthesis' : primaryFinding.title}
+            </h3>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', maxWidth: '800px', lineHeight: 1.6 }}>
+              {investigation ? investigation.summary : primaryFinding.explanation}
             </p>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--accent-warning)' }}>
-              {Math.round(primaryFinding.confidence * 100)}%
+          <div style={{ textAlign: 'right', minWidth: '120px' }}>
+            <div style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--accent-warning)' }}>
+              {Math.round(overallConfidence * 100)}%
             </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Evidence Confidence</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Overall Confidence</div>
           </div>
         </div>
 
@@ -111,8 +269,9 @@ export const InvestigationPage: React.FC = () => {
           </div>
           <div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Recommended Action</div>
-            <a
-              href="/cases"
+            <button
+              onClick={handleGenerateReviewPackage}
+              disabled={generatingPackage}
               style={{
                 display: 'inline-block',
                 marginTop: '0.2rem',
@@ -122,13 +281,149 @@ export const InvestigationPage: React.FC = () => {
                 padding: '0.4rem 0.8rem',
                 borderRadius: '4px',
                 fontWeight: 600,
+                border: 'none',
+                cursor: generatingPackage ? 'not-allowed' : 'pointer',
               }}
             >
-              Generate Review Package
-            </a>
+              {generatingPackage ? 'Preparing Package...' : 'Generate Review Package'}
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Evidence-Backed Findings */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <h3 style={{ fontSize: '1.15rem', fontWeight: 600 }}>
+          Evidence-Backed Findings ({activeFindings.length})
+        </h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {activeFindings.map((finding) => (
+            <div
+              key={finding.id}
+              style={{
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '8px',
+                padding: '1.25rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span
+                    className={
+                      finding.severity === 'HIGH'
+                        ? 'badge badge-danger'
+                        : finding.severity === 'MEDIUM'
+                        ? 'badge badge-warning'
+                        : 'badge badge-success'
+                    }
+                  >
+                    {finding.severity} SEVERITY
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                    {finding.type}
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent-warning)' }}>
+                  {Math.round(finding.confidence * 100)}% Confidence
+                </div>
+              </div>
+
+              <div>
+                <h4 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.35rem' }}>
+                  {finding.title}
+                </h4>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  {finding.explanation}
+                </p>
+              </div>
+
+              {finding.evidenceIds && finding.evidenceIds.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                    Supporting Evidence:
+                  </span>
+                  {finding.evidenceIds.map((evId) => (
+                    <button
+                      key={evId}
+                      data-testid={`evidence-chip-${evId}`}
+                      onClick={() => setSelectedEvidenceId(evId)}
+                      style={{
+                        fontSize: '0.75rem',
+                        padding: '0.2rem 0.5rem',
+                        borderRadius: '4px',
+                        background: 'rgba(59, 130, 246, 0.15)',
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        color: '#93c5fd',
+                        fontFamily: 'monospace',
+                        cursor: 'pointer',
+                      }}
+                      title="Inspect evidence provenance"
+                    >
+                      {evId}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Contradictions & Missing Evidence Side-by-Side */}
+      {investigation && (investigation.contradictions?.length > 0 || investigation.missingEvidence?.length > 0) && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+          {/* Contradictions */}
+          {investigation.contradictions && investigation.contradictions.length > 0 && (
+            <div style={{ background: 'var(--bg-surface)', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <span className="badge badge-danger">CONTRADICTIONS</span>
+                <h4 style={{ fontSize: '0.95rem', fontWeight: 600 }}>Platform Contradictions Detected</h4>
+              </div>
+              <ul style={{ paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                {investigation.contradictions.map((contra, idx) => (
+                  <li key={idx}>{contra}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Missing Evidence */}
+          {investigation.missingEvidence && investigation.missingEvidence.length > 0 && (
+            <div style={{ background: 'var(--bg-surface)', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <span className="badge badge-warning">MISSING EVIDENCE</span>
+                <h4 style={{ fontSize: '0.95rem', fontWeight: 600 }}>Unverified Claims / Gaps</h4>
+              </div>
+              <ul style={{ paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                {investigation.missingEvidence.map((miss, idx) => (
+                  <li key={idx}>{miss}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Recommended Actions */}
+      {investigation && investigation.recommendedActions && investigation.recommendedActions.length > 0 && (
+        <div style={{ background: 'var(--bg-surface)', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <span className="badge badge-success">RECOMMENDED ACTIONS</span>
+            <h4 style={{ fontSize: '0.95rem', fontWeight: 600 }}>Dispute Strategy & Next Steps</h4>
+          </div>
+          <ul style={{ paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+            {investigation.recommendedActions.map((action, idx) => (
+              <li key={idx} style={{ lineHeight: 1.5 }}>
+                <strong style={{ color: 'var(--text-primary)' }}>Step {idx + 1}:</strong> {action}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Reconstructed Timeline with explicit IST timestamps */}
       <div style={{ background: 'var(--bg-surface)', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
@@ -163,6 +458,12 @@ export const InvestigationPage: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {/* Reusable Evidence Inspector Drawer */}
+      <EvidenceInspector
+        evidenceId={selectedEvidenceId}
+        onClose={() => setSelectedEvidenceId(null)}
+      />
     </div>
   );
 };

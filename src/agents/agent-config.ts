@@ -1,8 +1,6 @@
-import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime';
-
 export interface AgentRuntimeConfig {
   useBedrock: boolean;
-  bedrockClient: BedrockRuntimeClient | null;
+  bedrockClient: unknown | null;
   modelId: string;
   region: string;
   maxTokens: number;
@@ -15,13 +13,10 @@ export function getAgentRuntimeConfig(): AgentRuntimeConfig {
   if (cachedConfig) return cachedConfig;
 
   const useBedrock = process.env.MOCK_AI === 'false';
-  const modelId = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-5-sonnet-20241022-v2:0';
+  const modelId = process.env.BEDROCK_MODEL_ID || 'openai.gpt-oss-120b';
   const region = process.env.AWS_REGION || 'ap-south-1';
 
-  let bedrockClient: BedrockRuntimeClient | null = null;
-  if (useBedrock) {
-    bedrockClient = new BedrockRuntimeClient({ region });
-  }
+  let bedrockClient: unknown | null = null;
 
   cachedConfig = {
     useBedrock,

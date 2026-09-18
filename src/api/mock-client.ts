@@ -14,14 +14,12 @@ import {
   demoExpenses,
   demoCases,
 } from '../../fixtures/demo-worker.ts';
-import { MockAIService } from '../ai/service.ts';
 
 /**
  * MockApiClient implements KavachApiClient purely in-memory using canonical fixtures.
  * Enables zero-dependency offline development for Frontend and UI testing.
  */
 export class MockApiClient implements KavachApiClient {
-  private aiService = new MockAIService();
 
   async getWorker(workerId: string): Promise<Worker> {
     if (workerId === demoWorker.id) {
@@ -63,7 +61,28 @@ export class MockApiClient implements KavachApiClient {
   }
 
   async investigateTrip(tripId: string): Promise<AIInvestigationResult> {
-    return this.aiService.investigateCase(tripId);
+    return {
+      summary: `Multi-agent investigation for trip ${tripId}: Merchant wait time of 15 minutes left insufficient transit time (15m remaining of 30m SLA). Penalty of ₹350 is contested by verified telemetry.`,
+      findings: [
+        {
+          id: 'finding-late-penalty-01',
+          type: 'DECISION_REVIEW',
+          severity: 'HIGH',
+          title: 'Late delivery penalty warrants review due to merchant queue delay',
+          explanation:
+            'Platform levied a ₹350 penalty citing late delivery. Evidence confirms worker arrived at merchant but experienced 15 minutes of uncompensated merchant delay before package handover, leaving insufficient SLA for delivery.',
+          confidence: 0.94,
+          evidenceIds: ['ev-store-arrival-gps', 'ev-merchant-handover-scan'],
+        },
+      ],
+      missingEvidence: [],
+      contradictions: [],
+      recommendedActions: [
+        'Generate dispute package with store arrival GPS and merchant handover scan',
+        'Request waiver of ₹350 penalty based on uncredited merchant wait time',
+      ],
+      confidence: 0.94,
+    };
   }
 
   async queryWorkerTwin(query: WorkerTwinQuery): Promise<WorkerTwinResponse> {
@@ -91,11 +110,12 @@ export class HttpApiClient implements KavachApiClient {
   private baseUrl: string;
 
   constructor(baseUrl?: string) {
-    this.baseUrl = baseUrl || 'http://localhost:3001/api';
+    this.baseUrl = (baseUrl || 'http://localhost:3001/api').replace(/\/+$/, '');
   }
 
   private async fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    const res = await fetch(`${this.baseUrl}${cleanPath}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -141,7 +161,7 @@ export class HttpApiClient implements KavachApiClient {
   async investigateTrip(tripId: string): Promise<AIInvestigationResult> {
     return this.fetchJson<AIInvestigationResult>(`/investigations`, {
       method: 'POST',
-      body: JSON.stringify({ tripId }),
+      body: JSON.stringify({ tripId, workerId: 'worker-vikram-01' }),
     });
   }
 
@@ -159,10 +179,30 @@ export class HttpApiClient implements KavachApiClient {
   }
 }
 
-/**
- * Singleton client factory
- */
+export function isLiveApiConfigured(): boolean {
+  return Boolean(
+    (typeof import.meta !== 'undefined' &&
+      ((import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL)) ||
+    (typeof process !== 'undefined' &&
+      (process.env?.VITE_API_BASE_URL || process.env?.VITE_API_URL)) ||
+    (typeof window !== 'undefined' &&
+      ((window as any).__ENV__?.VITE_API_BASE_URL || (window as any).__ENV__?.VITE_API_URL))
+  );
+}
+
 export function createApiClient(): KavachApiClient {
-  // If running in browser or test without server, MockApiClient provides immediate resilience
+  const apiUrl =
+    (typeof import.meta !== 'undefined' &&
+      ((import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL)) ||
+    (typeof process !== 'undefined' &&
+      (process.env?.VITE_API_BASE_URL || process.env?.VITE_API_URL)) ||
+    (typeof window !== 'undefined' &&
+      ((window as any).__ENV__?.VITE_API_BASE_URL || (window as any).__ENV__?.VITE_API_URL));
+
+  if (apiUrl) {
+    return new HttpApiClient(apiUrl);
+  }
+  // If running in browser or test without configured server, MockApiClient provides immediate resilience
   return new MockApiClient();
 }
+

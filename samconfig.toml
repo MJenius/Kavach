@@ -1,0 +1,17 @@
+version = 0.1
+
+[default.global.parameters]
+region = "ap-south-1"
+
+[default.build.parameters]
+template_file = "infra/template.yaml"
+
+[default.deploy.parameters]
+template_file = ".aws-sam/build/template.yaml"
+stack_name = "kavach-ai"
+resolve_s3 = true
+s3_prefix = "kavach-ai"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Stage=\"dev\" BedrockModelId=\"openai.gpt-oss-120b\" BedrockMantleBaseUrl=\"https://bedrock-mantle.ap-south-1.api.aws/v1\""
+image_repositories = []

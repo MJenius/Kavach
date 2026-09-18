@@ -27,12 +27,19 @@ describe('AIService Abstraction & Bedrock Adapter', () => {
   });
 
   it('BedrockAIService fails safely when credentials are missing', async () => {
-    delete process.env.AWS_ACCESS_KEY_ID;
-    delete process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI;
+    // Test Claude provider credentials check with mock rejecting credentials
+    const mockCredErrorClient = {
+      send: vi.fn().mockRejectedValue(new Error('Could not load credentials from any providers')),
+    } as any;
+    const bedrockClaude = new BedrockAIService({ provider: 'bedrock-claude', modelId: 'anthropic.claude-3v2', client: mockCredErrorClient });
+    await expect(bedrockClaude.generateText('Test')).rejects.toThrow('requires AWS credentials');
 
-    const bedrock = new BedrockAIService({ modelId: 'anthropic.claude-3v2' });
-    await expect(bedrock.generateText('Test')).rejects.toThrow('requires AWS credentials');
+    // Test Mantle provider failure on invalid/missing auth
+    const bedrockMantle = new BedrockAIService({ provider: 'mantle', modelId: 'openai.gpt-oss-120b', apiKey: 'invalid-key' });
+    await expect(bedrockMantle.generateText('Test')).rejects.toThrow('Bedrock Mantle invocation failed');
   });
+
+
 
   it('BedrockAIService.investigateCase delegates directly to SupervisorAgent', async () => {
     const bedrock = new BedrockAIService({ modelId: 'anthropic.claude-3v2' });

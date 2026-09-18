@@ -1,5 +1,5 @@
 import { Finding } from '../domain/index.ts';
-import type { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime';
+import type { ValidationResult } from './structured-output.ts';
 
 export interface TextGenerationRequest {
   prompt: string;
@@ -44,13 +44,23 @@ export interface StructuredGenerationRequest<T = unknown> {
   validate?: (data: unknown) => { success: boolean; data?: T; error?: string };
 }
 
+export interface BedrockLLMProvider {
+  modelId: string;
+  generateText(request: TextGenerationRequest | string): Promise<TextGenerationResponse>;
+  generateStructured<T>(request: StructuredGenerationRequest<T>): Promise<ValidationResult<T>>;
+  extractDocument(request: DocumentExtractionRequest): Promise<DocumentExtractionResult>;
+}
+
 export interface AIServiceConfig {
   region?: string;
   modelId?: string;
   maxTokens?: number;
   temperature?: number;
   mockMode?: boolean;
-  client?: BedrockRuntimeClient;
+  client?: any;
+  provider?: 'mantle' | 'bedrock-claude';
+  baseURL?: string;
+  apiKey?: string;
 }
 
 export interface ForensicsAnalysisResult {

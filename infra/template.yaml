@@ -6,21 +6,32 @@ Description: >
 
 Globals:
   Function:
-    Timeout: 30
+    Timeout: 60
     Runtime: nodejs20.x
-    MemorySize: 512
+    MemorySize: 1024
     Environment:
       Variables:
         STAGE: !Ref Stage
+        MOCK_AI: 'false'
+        MOCK_AWS: 'false'
+        BEDROCK_MODEL_ID: !Ref BedrockModelId
+        BEDROCK_MANTLE_BASE_URL: !Ref BedrockMantleBaseUrl
         DYNAMODB_TABLE_PREFIX: !Sub '${AWS::StackName}-'
         S3_EVIDENCE_BUCKET: !Ref EvidenceStorageBucket
-        BEDROCK_MODEL_ID: 'anthropic.claude-3-5-sonnet-20241022-v2:0'
 
 Parameters:
   Stage:
     Type: String
     Default: dev
     AllowedValues: [dev, staging, prod]
+  BedrockModelId:
+    Type: String
+    Default: openai.gpt-oss-120b
+    Description: Primary Bedrock Mantle model ID
+  BedrockMantleBaseUrl:
+    Type: String
+    Default: https://bedrock-mantle.ap-south-1.api.aws/v1
+    Description: Bedrock Mantle OpenAI-compatible endpoint URL
 
 Resources:
   # ============================================================================
@@ -31,7 +42,7 @@ Resources:
     Properties:
       UserPoolName: !Sub '${AWS::StackName}-workers-${Stage}'
       AutoVerifiedAttributes:
-        - phone_number
+        - email
       UsernameAttributes:
         - phone_number
 
@@ -90,12 +101,20 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
-      CodeUri: ../src/api/
+      CodeUri: ../
       Policies:
+
         - DynamoDBCrudPolicy:
             TableName: !Ref WorkerDataTable
         - S3CrudPolicy:
             BucketName: !Ref EvidenceStorageBucket
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:InvokeModelWithResponseStream
+                - bedrock-mantle:CreateInference
+              Resource: '*'
       Events:
         ApiRoot:
           Type: Api
@@ -103,6 +122,20 @@ Resources:
             RestApiId: !Ref KavachApi
             Path: /{proxy+}
             Method: ANY
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: false
+        Target: "node20"
+        Sourcemap: false
+        Format: "esm"
+        OutExtension:
+          - .js=.mjs
+        Banner:
+          - "js=import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);"
+        EntryPoints:
+          - src/api/index.ts
+
 
   # ============================================================================
   # 4. STEP FUNCTIONS (Investigation & Dispute Workflow) - Person 3
