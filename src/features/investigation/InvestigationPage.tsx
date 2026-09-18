@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { loadDemoDataset } from '../../../fixtures/demo-worker.ts';
 import { calculateSLAFeasibility } from '../../calculations/index.ts';
 import { createApiClient } from '../../api/mock-client.ts';
 import type { AIInvestigationResult } from '../../domain/index.ts';
+import type { ReviewPackageNavigationState } from '../cases/review-package.ts';
 
 /**
  * Format ISO timestamp to 24-hr Indian Standard Time (HH:mm IST) consistently
@@ -17,12 +19,14 @@ function formatTimeIST(iso: string): string {
 }
 
 export const InvestigationPage: React.FC = () => {
+  const navigate = useNavigate();
   const data = loadDemoDataset();
   const primaryFinding = data.findings[0];
   const primaryTrip = data.trips[0];
 
   const [investigation, setInvestigation] = useState<AIInvestigationResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [generatingPackage, setGeneratingPackage] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Dynamic calculations derived from events rather than hardcoded
@@ -42,17 +46,53 @@ export const InvestigationPage: React.FC = () => {
   const penaltyRecord = data.earnings.find((e) => e.type === 'PENALTY');
   const penaltyAmount = Math.abs(penaltyRecord?.actualAmount || 350);
 
+  const runInvestigation = async (): Promise<AIInvestigationResult> => {
+    const client = createApiClient();
+    const result = await client.investigateTrip(primaryTrip.id);
+    setInvestigation(result);
+    return result;
+  };
+
   const handleStartInvestigation = async () => {
     setLoading(true);
     setError(null);
     try {
-      const client = createApiClient();
-      const result = await client.investigateTrip(primaryTrip.id);
-      setInvestigation(result);
+      await runInvestigation();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGenerateReviewPackage = async () => {
+    setGeneratingPackage(true);
+    setError(null);
+    try {
+      let activeResult = investigation;
+      if (!activeResult) {
+        setLoading(true);
+        activeResult = await runInvestigation();
+        setLoading(false);
+      }
+
+      const navState: ReviewPackageNavigationState = {
+        type: 'generated-review-package',
+        caseId: `case-${primaryTrip.id}`,
+        tripId: primaryTrip.id,
+        workerId: data.worker.id,
+        workerName: data.worker.name,
+        disputedAmount: penaltyAmount,
+        caseStatus: 'READY',
+        investigation: activeResult,
+        timeline: data.tripEvents.filter((e) => e.tripId === primaryTrip.id),
+      };
+
+      navigate('/cases', { state: navState });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGeneratingPackage(false);
     }
   };
 
@@ -172,7 +212,7 @@ export const InvestigationPage: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
               <span className="badge badge-danger">PLATFORM CLAIM: ₹{penaltyAmount} PENALTY</span>
               <span className="badge badge-warning">
-                {investigation ? 'AI VERIFIED: DISPUTE RECOMMENDED' : 'STATUS: DISCREPANCY DETECTED'}
+                {investigation ? 'AI ANALYSIS: REVIEW RECOMMENDED' : 'STATUS: DISCREPANCY DETECTED'}
               </span>
             </div>
             <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>
@@ -227,8 +267,9 @@ export const InvestigationPage: React.FC = () => {
           </div>
           <div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Recommended Action</div>
-            <a
-              href="/cases"
+            <button
+              onClick={handleGenerateReviewPackage}
+              disabled={generatingPackage}
               style={{
                 display: 'inline-block',
                 marginTop: '0.2rem',
@@ -238,10 +279,12 @@ export const InvestigationPage: React.FC = () => {
                 padding: '0.4rem 0.8rem',
                 borderRadius: '4px',
                 fontWeight: 600,
+                border: 'none',
+                cursor: generatingPackage ? 'not-allowed' : 'pointer',
               }}
             >
-              Generate Review Package
-            </a>
+              {generatingPackage ? 'Preparing Package...' : 'Generate Review Package'}
+            </button>
           </div>
         </div>
       </div>
