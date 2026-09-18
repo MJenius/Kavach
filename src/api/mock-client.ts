@@ -109,24 +109,43 @@ export class MockApiClient implements KavachApiClient {
 export class HttpApiClient implements KavachApiClient {
   private baseUrl: string;
 
-  constructor(baseUrl?: string) {
+  private defaultTimeoutMs: number;
+
+  constructor(baseUrl?: string, defaultTimeoutMs: number = 30000) {
     this.baseUrl = (baseUrl || 'http://localhost:3001/api').replace(/\/+$/, '');
+    this.defaultTimeoutMs = defaultTimeoutMs;
   }
 
-  private async fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
+  private async fetchJson<T>(path: string, options?: RequestInit, timeoutMs?: number): Promise<T> {
     const cleanPath = path.startsWith('/') ? path : `/${path}`;
-    const res = await fetch(`${this.baseUrl}${cleanPath}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
-    });
-    if (!res.ok) {
-      throw new Error(`API error ${res.status}: ${res.statusText}`);
+    const timeout = timeoutMs ?? this.defaultTimeoutMs;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      controller.abort();
+    }, timeout);
+
+    try {
+      const res = await fetch(`${this.baseUrl}${cleanPath}`, {
+        ...options,
+        signal: options?.signal || controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options?.headers,
+        },
+      });
+      clearTimeout(timer);
+      if (!res.ok) {
+        throw new Error(`API error ${res.status}: ${res.statusText}`);
+      }
+      const envelope = await res.json();
+      return envelope.data;
+    } catch (err: unknown) {
+      clearTimeout(timer);
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new Error(`Request timed out after ${Math.round(timeout / 1000)}s. Please retry.`);
+      }
+      throw err;
     }
-    const envelope = await res.json();
-    return envelope.data;
   }
 
   async getWorker(workerId: string): Promise<Worker> {

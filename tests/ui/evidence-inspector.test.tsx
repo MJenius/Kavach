@@ -128,4 +128,21 @@ describe('Evidence Inspector & Provenance Flow', () => {
     expect(html).toContain('ev-merchant-handover-scan');
     expect(html).toContain('title="Inspect evidence provenance"');
   });
+
+  it('renders InvestigationPage with live trigger button and penalty claim', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/investigation']}>
+        <InvestigationPage />
+      </MemoryRouter>
+    );
+
+    expect(html).toContain('Trip Forensics &amp; Discrepancy Investigation');
+    expect(html).toContain('Start Live AI Investigation');
+    expect(html).toContain('PLATFORM CLAIM:');
+    expect(html).toContain('350');
+    expect(html).toContain('PENALTY');
+    expect(html).toContain('Generate Review Package');
+    // Ensure no error alert on initial healthy render
+    expect(html).not.toContain('Investigation Request Unavailable');
+  });
 });

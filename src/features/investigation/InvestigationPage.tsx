@@ -19,7 +19,13 @@ function formatTimeIST(iso: string): string {
   }).format(new Date(iso)) + ' IST';
 }
 
-export const InvestigationPage: React.FC = () => {
+export interface InvestigationPageProps {
+  apiClient?: {
+    investigateTrip: (tripId: string) => Promise<AIInvestigationResult>;
+  };
+}
+
+export const InvestigationPage: React.FC<InvestigationPageProps> = ({ apiClient }) => {
   const navigate = useNavigate();
   const data = loadDemoDataset();
   const primaryFinding = data.findings[0];
@@ -49,7 +55,7 @@ export const InvestigationPage: React.FC = () => {
   const penaltyAmount = Math.abs(penaltyRecord?.actualAmount || 350);
 
   const runInvestigation = async (): Promise<AIInvestigationResult> => {
-    const client = createApiClient();
+    const client = apiClient || createApiClient();
     const result = await client.investigateTrip(primaryTrip.id);
     setInvestigation(result);
     return result;
@@ -167,21 +173,29 @@ export const InvestigationPage: React.FC = () => {
         </div>
       )}
 
-      {/* Error Alert */}
+      {/* Error / Timeout Alert */}
       {error && (
         <div
+          role="alert"
           style={{
             background: 'rgba(239, 68, 68, 0.15)',
             border: '1px solid var(--accent-danger)',
             borderRadius: '8px',
-            padding: '1rem',
+            padding: '1.25rem',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '1rem',
           }}
         >
-          <div style={{ color: 'var(--accent-danger)', fontSize: '0.9rem' }}>
-            <strong>Investigation Error:</strong> {error}
+          <div style={{ flex: 1, minWidth: '260px' }}>
+            <div style={{ color: 'var(--accent-danger)', fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.25rem' }}>
+              Investigation Request Unavailable
+            </div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.5 }}>
+              {error}
+            </div>
           </div>
           <button
             onClick={handleStartInvestigation}
@@ -189,13 +203,17 @@ export const InvestigationPage: React.FC = () => {
               background: 'var(--accent-danger)',
               color: '#fff',
               border: 'none',
-              padding: '0.4rem 0.8rem',
-              borderRadius: '4px',
-              fontSize: '0.8rem',
+              padding: '0.5rem 1.1rem',
+              borderRadius: '6px',
+              fontSize: '0.85rem',
+              fontWeight: 600,
               cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
             }}
           >
-            Retry
+            <span>🔄</span> Retry Investigation
           </button>
         </div>
       )}

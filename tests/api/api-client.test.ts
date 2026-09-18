@@ -22,4 +22,53 @@ describe('API Client Layer', () => {
     expect(earnings.grossTotal).toBeDefined();
     expect(earnings.netRealTotal).toBeLessThan(earnings.grossTotal);
   });
+
+  it('HttpApiClient aborts and surfaces a clear timeout error when API response is delayed', async () => {
+    const { HttpApiClient } = await import('../../src/api/mock-client.ts');
+    // Test client with a fast 50ms timeout
+    const client = new HttpApiClient('http://127.0.0.1:54321/api', 50);
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = ((_url: any, options?: any) => {
+      return new Promise((_resolve, reject) => {
+        if (options?.signal) {
+          options.signal.addEventListener('abort', () => {
+            const err = new Error('The operation was aborted');
+            err.name = 'AbortError';
+            reject(err);
+          });
+        }
+      });
+    }) as any;
+
+    try {
+      await expect(client.investigateTrip('trip-test-01')).rejects.toThrow(
+        /Request timed out after/
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('HttpApiClient surfaces clear network error message on API failure', async () => {
+    const { HttpApiClient } = await import('../../src/api/mock-client.ts');
+    const client = new HttpApiClient('http://127.0.0.1:54321/api', 5000);
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (() => {
+      return Promise.resolve({
+        ok: false,
+        status: 504,
+        statusText: 'Gateway Timeout',
+      });
+    }) as any;
+
+    try {
+      await expect(client.investigateTrip('trip-test-01')).rejects.toThrow(
+        'API error 504: Gateway Timeout'
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
