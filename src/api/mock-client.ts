@@ -179,6 +179,17 @@ export class HttpApiClient implements KavachApiClient {
   }
 }
 
+export function isLiveApiConfigured(): boolean {
+  return Boolean(
+    (typeof import.meta !== 'undefined' &&
+      ((import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL)) ||
+    (typeof process !== 'undefined' &&
+      (process.env?.VITE_API_BASE_URL || process.env?.VITE_API_URL)) ||
+    (typeof window !== 'undefined' &&
+      ((window as any).__ENV__?.VITE_API_BASE_URL || (window as any).__ENV__?.VITE_API_URL))
+  );
+}
+
 export function createApiClient(): KavachApiClient {
   const apiUrl =
     (typeof import.meta !== 'undefined' &&

@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import { isLiveApiConfigured } from '../api/mock-client.ts';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -73,7 +74,13 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
         {/* Worker Badge */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span className="badge badge-success">MOCK MODE</span>
+          {isLiveApiConfigured() ? (
+            <span className="badge badge-success" style={{ background: '#059669', color: '#fff' }}>
+              LIVE CLOUD
+            </span>
+          ) : (
+            <span className="badge badge-success">MOCK MODE</span>
+          )}
           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
             Vikram S. (QuickBite)
           </span>
