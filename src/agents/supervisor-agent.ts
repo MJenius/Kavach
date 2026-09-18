@@ -68,9 +68,17 @@ export class SupervisorAgent implements Agent<SupervisorInput, SupervisorOutput>
       };
     }
 
-    // Default or INVESTIGATE_CASE: Orchestrate Forensics -> Earnings -> Policy
+    // Default or INVESTIGATE_CASE: Orchestrate Forensics, Earnings, and Policy agents concurrently
+    const [forensicsRes, earningsRes, policyRes] = await Promise.all([
+      this.forensicsAgent.run({ tripId }),
+      this.earningsAgent.run({ workerId: input.workerId }),
+      this.policyAgent.run({
+        platform: 'QuickBite',
+        issueType: 'MERCHANT_DELAY',
+      }),
+    ]);
+
     // 1. Forensics
-    const forensicsRes = await this.forensicsAgent.run({ tripId });
     agentResults.forensics = forensicsRes;
     findings.push(...forensicsRes.findings);
     missingEvidence.push(...forensicsRes.missingEvidence);
@@ -78,7 +86,6 @@ export class SupervisorAgent implements Agent<SupervisorInput, SupervisorOutput>
     recommendedActions.push(...forensicsRes.recommendedActions);
 
     // 2. Earnings
-    const earningsRes = await this.earningsAgent.run({ workerId: input.workerId });
     agentResults.earnings = earningsRes;
     for (const f of earningsRes.findings) {
       if (!findings.some((existing) => existing.id === f.id)) {
@@ -87,12 +94,7 @@ export class SupervisorAgent implements Agent<SupervisorInput, SupervisorOutput>
     }
 
     // 3. Policy
-    const policyRes = await this.policyAgent.run({
-      platform: 'QuickBite',
-      issueType: 'MERCHANT_DELAY',
-    });
     agentResults.policy = policyRes;
-
     if (policyRes.isApplicable && policyRes.relevantRule) {
       recommendedActions.push(
         `Cite ${policyRes.relevantRule.policyName} (${policyRes.relevantRule.clauseReference}) in formal dispute submission`
