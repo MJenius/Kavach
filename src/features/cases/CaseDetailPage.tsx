@@ -19,6 +19,7 @@ export const CaseDetailPage: React.FC = () => {
   const { caseId } = useParams<{ caseId: string }>();
   const data = loadDemoDataset();
   const location = useLocation();
+  const [caseFileCopied, setCaseFileCopied] = useState(false);
 
   const normalizedCaseId = caseId || 'case-001';
   const isPenaltyCase = normalizedCaseId === 'case-001' || normalizedCaseId.includes('trip');
@@ -122,14 +123,12 @@ export const CaseDetailPage: React.FC = () => {
       timeline: stored?.timeline || heroEvents,
     });
 
-    const [copied, setCopied] = useState(false);
-
     const handleCopy = async () => {
       try {
         if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
           await navigator.clipboard.writeText(packageText);
-          setCopied(true);
-          setTimeout(() => setCopied(false), 3000);
+          setCaseFileCopied(true);
+          setTimeout(() => setCaseFileCopied(false), 3000);
         }
       } catch (err) {
         console.error('Failed to copy', err);
@@ -162,7 +161,7 @@ export const CaseDetailPage: React.FC = () => {
           </div>
 
           <Button variant="primary" size="sm" onClick={handleCopy}>
-            {copied ? (
+            {caseFileCopied ? (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
                 <CheckIcon size={14} /> Copied to Clipboard
               </span>

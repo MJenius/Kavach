@@ -113,7 +113,20 @@ export class HttpApiClient implements KavachApiClient {
       });
       clearTimeout(timer);
       if (!res.ok) {
-        throw new Error(`API error ${res.status}: ${res.statusText}`);
+        let detail = res.statusText;
+
+        try {
+          const errorBody = await res.json();
+          detail =
+            errorBody?.error ||
+            errorBody?.message ||
+            errorBody?.detail ||
+            detail;
+        } catch {
+          // Response was not JSON; keep status text.
+        }
+
+        throw new Error(`API error ${res.status}: ${detail}`);
       }
       const envelope = await res.json();
       return envelope.data;
@@ -159,14 +172,14 @@ export class HttpApiClient implements KavachApiClient {
     return this.fetchJson<AIInvestigationResult>(`/investigations`, {
       method: 'POST',
       body: JSON.stringify({ tripId, workerId: 'worker-vikram-01' }),
-    });
+    }, 180000); // 3 minutes: SupervisorAgent orchestrates Forensics + Earnings + Policy via Bedrock
   }
 
   async queryWorkerTwin(query: WorkerTwinQuery): Promise<WorkerTwinResponse> {
     return this.fetchJson<WorkerTwinResponse>(`/worker-twin/query`, {
       method: 'POST',
       body: JSON.stringify(query),
-    });
+    }, 60000); // Worker twin may also route through Bedrock
   }
 
   async generateEvidencePackage(caseId: string) {
