@@ -10,7 +10,7 @@ import {
 import { EvidenceInspector } from '../../components/EvidenceInspector.tsx';
 import { getCaseService } from '../../services/index.ts';
 import { Button } from '../../components/ui/Button.tsx';
-import { ClipboardIcon, CheckIcon, SearchIcon, AlertTriangleIcon } from '../../components/icons.tsx';
+import { ClipboardIcon, CheckIcon, SearchIcon, AlertTriangleIcon, DownloadIcon } from '../../components/icons.tsx';
 
 /**
  * Format ISO timestamp to 24-hr Indian Standard Time (HH:mm IST) consistently
@@ -156,6 +156,30 @@ export const CasesPage: React.FC = () => {
     } catch {
       setCopyStatus('FALLBACK');
     }
+  };
+
+  const handleDownloadReviewPackage = () => {
+    if (!activeReviewCase) return;
+    const text =
+      packageText ||
+      generateReviewPackage({
+        caseId: activeReviewCase.caseId,
+        tripId: activeReviewCase.tripId,
+        workerName: activeReviewCase.workerName,
+        disputedAmount: activeReviewCase.disputedAmount,
+        investigation: activeReviewCase.investigation,
+        timeline: activeReviewCase.timeline,
+      });
+
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${activeReviewCase.caseId}-dispute-package.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -386,6 +410,28 @@ export const CasesPage: React.FC = () => {
                     Open Case File
                   </Button>
                 </Link>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadReviewPackage}
+                  style={{
+                    background: 'var(--bg-surface-hover)',
+                    border: '1px solid var(--border-color)',
+                    color: 'var(--text-primary)',
+                    padding: '0.6rem 0.9rem',
+                    borderRadius: 'var(--radius-sm)',
+                    fontWeight: 600,
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    transition: 'all 0.2s ease',
+                  }}
+                  title="Download dispute package file locally"
+                >
+                  <DownloadIcon size={14} /> Download Package File
+                </button>
               </div>
             </div>
           </div>

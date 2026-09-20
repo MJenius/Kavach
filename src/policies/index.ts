@@ -25,10 +25,10 @@ export class MockPolicyRepository implements PolicyRepository {
     {
       id: 'pol-qb-merchant-delay',
       platform: 'QuickBite',
-      section: 'Merchant Delay Policy',
-      title: 'Merchant Handover Delays',
+      section: 'Merchant Delay Policy Clause 4.2',
+      title: 'Merchant Handover Delays (Demo Policy Record)',
       content:
-        'When order preparation exceeds 5 minutes at store, delivery partner SLA must automatically adjust or be waived upon evidence submission.',
+        'Demo Policy Record: When order preparation exceeds 5 minutes at store, delivery partner SLA must automatically adjust or be waived upon evidence submission.',
       lastUpdated: '2026-01-15',
     },
   ];

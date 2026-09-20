@@ -24,6 +24,10 @@ Parameters:
     Type: String
     Default: dev
     AllowedValues: [dev, staging, prod]
+  AllowedOrigin:
+    Type: String
+    Default: 'http://localhost:3000'
+    Description: Allowed origin domain for secure CORS enforcement
   BedrockModelId:
     Type: String
     Default: openai.gpt-oss-120b
@@ -67,7 +71,10 @@ Resources:
         CorsRules:
           - AllowedHeaders: ['*']
             AllowedMethods: [GET, PUT, POST]
-            AllowedOrigins: ['*']
+            AllowedOrigins:
+              - !Ref AllowedOrigin
+              - 'http://localhost:3000'
+              - 'https://main.d12345abcdef.amplifyapp.com'
 
   WorkerDataTable:
     Type: AWS::DynamoDB::Table
@@ -95,7 +102,14 @@ Resources:
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'"
-        AllowOrigin: "'*'"
+        AllowOrigin: !Sub "'${AllowedOrigin}'"
+      Auth:
+        DefaultAuthorizer: CognitoAuth
+        Authorizers:
+          CognitoAuth:
+            UserPoolArn: !GetAtt WorkerUserPool.Arn
+            Identity:
+              Header: Authorization
 
   ApiHandlerFunction:
     Type: AWS::Serverless::Function

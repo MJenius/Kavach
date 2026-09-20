@@ -81,12 +81,21 @@ export class S3CaseService implements CaseService {
         new PutObjectCommand({
           Bucket: this.bucket,
           Key: key,
-          Body: JSON.stringify({ caseId, evidenceCount: evidenceItems.length, timestamp: new Date().toISOString() }),
+          Body: JSON.stringify({
+            caseId,
+            evidenceCount: evidenceItems.length,
+            evidenceIds: evidenceItems.map((e) => e.id),
+            timestamp: new Date().toISOString(),
+          }),
           ContentType: 'application/json',
         })
       );
-    } catch {
-      // In local dev/mock without active AWS credentials, continue gracefully
+    } catch (error) {
+      if (process.env.MOCK_AWS === 'false') {
+        const msg = error instanceof Error ? error.message : String(error);
+        throw new Error(`S3 package export failed for bucket ${this.bucket}: ${msg}`);
+      }
+      // In local dev/mock without active AWS credentials, continue gracefully with mock URI
     }
     return {
       packageUri: `s3://${this.bucket}/${key}`,
