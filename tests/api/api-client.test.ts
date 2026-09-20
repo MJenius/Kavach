@@ -60,6 +60,7 @@ describe('API Client Layer', () => {
         ok: false,
         status: 504,
         statusText: 'Gateway Timeout',
+        json: () => Promise.reject(new Error('no body')),
       });
     }) as any;
 

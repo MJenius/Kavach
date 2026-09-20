@@ -89,7 +89,7 @@ export class HttpApiClient implements KavachApiClient {
 
   private defaultTimeoutMs: number;
 
-  constructor(baseUrl?: string, defaultTimeoutMs: number = 30000) {
+  constructor(baseUrl?: string, defaultTimeoutMs: number = 120000) {
     this.baseUrl = (baseUrl || 'http://localhost:3001/api').replace(/\/+$/, '');
     this.defaultTimeoutMs = defaultTimeoutMs;
   }
@@ -172,14 +172,14 @@ export class HttpApiClient implements KavachApiClient {
     return this.fetchJson<AIInvestigationResult>(`/investigations`, {
       method: 'POST',
       body: JSON.stringify({ tripId, workerId: 'worker-vikram-01' }),
-    }, 180000); // 3 minutes: SupervisorAgent orchestrates Forensics + Earnings + Policy via Bedrock
+    });
   }
 
   async queryWorkerTwin(query: WorkerTwinQuery): Promise<WorkerTwinResponse> {
     return this.fetchJson<WorkerTwinResponse>(`/worker-twin/query`, {
       method: 'POST',
       body: JSON.stringify(query),
-    }, 60000); // Worker twin may also route through Bedrock
+    });
   }
 
   async generateEvidencePackage(caseId: string) {
