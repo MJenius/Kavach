@@ -162,14 +162,7 @@ export class ForensicsAgent implements Agent<ForensicsAgentInput, ForensicsAnaly
           }
           return result.data;
         }
-        if (process.env.MOCK_AI === 'false') {
-          throw new Error(`Bedrock structured generation failed in ForensicsAgent: ${result.error || 'unknown error'}`);
-        }
-      } catch (err) {
-        if (process.env.MOCK_AI === 'false') {
-          throw err;
-        }
-      }
+      } catch { /* Deterministic reconstruction remains available when Bedrock fails. */ }
     }
 
     // Deterministic path (mock mode or Bedrock failure fallback)

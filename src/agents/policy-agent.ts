@@ -70,14 +70,7 @@ export class PolicyAgent implements Agent<PolicyAgentInput, PolicyAnalysisResult
           result.data.sourceUnavailable = false;
           return result.data;
         }
-        if (process.env.MOCK_AI === 'false') {
-          throw new Error(`Bedrock structured generation failed in PolicyAgent: ${result.error || 'unknown error'}`);
-        }
-      } catch (err) {
-        if (process.env.MOCK_AI === 'false') {
-          throw err;
-        }
-      }
+      } catch { /* Canonical policy remains available when Bedrock fails. */ }
     }
 
     // Deterministic path

@@ -6,6 +6,10 @@ export async function getTrip(tripId: string): Promise<Trip | null> {
   return trip ?? null;
 }
 
+export async function getTrips(workerId: string): Promise<Trip[]> {
+  return demoTrips.filter((trip) => trip.workerId === workerId);
+}
+
 export async function getTripEvents(tripId: string): Promise<TripEvent[]> {
   return demoTripEvents.filter((evt) => evt.tripId === tripId);
 }

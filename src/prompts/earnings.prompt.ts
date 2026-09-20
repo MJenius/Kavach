@@ -5,7 +5,12 @@ Your role:
 - Never calculate monetary differences or hourly wages yourself. Call or use deterministic calculations.
 - Reference supporting evidence IDs for every financial claim or penalty analyzed.
 - Propose concrete, actionable steps to recover disputed amounts.
-- Output MUST be valid JSON conforming to the EarningsAnalysisResult schema.`;
+- Return ONLY valid JSON. Do not add markdown or code fences.
+- The response MUST contain a "summary" object; never omit it or return it as a string.
+- Use this exact summary shape (all values are numbers):
+  { "summary": { "grossEarnings": number, "totalExpenses": number, "netEarnings": number, "totalDeductions": number, "effectiveHourlyRate": number } }
+- The deterministic Calculated Metrics are authoritative. Do not invent or alter earnings values.
+- Include workerId, findings (array), discrepancies (array), calculatedFacts (array), interpretation (string), recommendations (array), and confidence (number).`;
 
 export function generateEarningsUserPrompt(input: {
   workerId: string;

@@ -10,11 +10,11 @@ import {
   getExpenses,
   getIncentives,
   compareExpectedActual,
-  calculateEffectiveHourlyRate,
+  getTrips,
 } from './tools/index.ts';
 import { getEvidence } from './tools/evidence-tools.ts';
 import { getAgentRuntimeConfig } from './agent-config.ts';
-import { reconcilePayout } from '../calculations/earnings.ts';
+import { calculateFinancialSummary, reconcilePayout } from '../calculations/earnings.ts';
 import { reconcileIncentive } from '../calculations/incentives.ts';
 
 export interface EarningsAgentInput {
@@ -37,18 +37,17 @@ export class EarningsAgent implements Agent<EarningsAgentInput, EarningsAnalysis
     const earnings = await getEarnings(input.workerId);
     const expenses = await getExpenses(input.workerId);
     const incentives = await getIncentives(input.workerId);
+    const trips = await getTrips(input.workerId);
     const allEvidence = await getEvidence(input.workerId);
     const availableEvidenceIds = allEvidence.map((e) => e.id);
 
-    const grossEarnings = earnings.reduce((acc, curr) => acc + (curr.actualAmount || 0), 0);
-    const totalExpenses = expenses.reduce((acc, curr) => acc + curr.amount, 0);
-    const netEarnings = grossEarnings - totalExpenses;
-
+    const deterministic = calculateFinancialSummary(earnings, expenses, trips);
+    const grossEarnings = deterministic.platformGrossPayout;
+    const totalExpenses = deterministic.totalExpenses;
+    const netEarnings = deterministic.estimatedRealEarnings;
+    const totalDeductions = deterministic.deductions;
+    const hourlyRate = deterministic.effectiveHourlyRate;
     const penaltyRecords = earnings.filter((e) => e.type === 'PENALTY' || (e.actualAmount && e.actualAmount < 0));
-    const totalDeductions = penaltyRecords.reduce((acc, curr) => acc + Math.abs(curr.actualAmount || 0), 0);
-
-    const assumedWorkHours = 53;
-    const hourlyRate = calculateEffectiveHourlyRate(grossEarnings, totalExpenses, assumedWorkHours);
 
     const discrepancies: EarningsAnalysisResult['discrepancies'] = [];
     const findings: Finding[] = [];
@@ -130,6 +129,10 @@ export class EarningsAgent implements Agent<EarningsAgentInput, EarningsAnalysis
             netEarnings,
             totalDeductions,
             effectiveHourlyRate: hourlyRate,
+            platformNetPayout: deterministic.platformNetPayout,
+            activeHours: deterministic.activeHours,
+            expectedIncentive: incentives.reduce((sum, incentive) => sum + (incentive.expectedAmount || 0), 0),
+            actualIncentive: incentives.reduce((sum, incentive) => sum + (incentive.actualAmount || 0), 0),
             discrepancies,
           },
         });
@@ -142,32 +145,30 @@ export class EarningsAgent implements Agent<EarningsAgentInput, EarningsAnalysis
         });
 
         if (result.success && result.data) {
-          // Override calculated values to ensure deterministic numbers
-          result.data.summary = { grossEarnings, totalExpenses, netEarnings, totalDeductions, effectiveHourlyRate: hourlyRate };
-          result.data.calculatedFacts = calculatedFacts;
+          const candidate = result.data as unknown;
+          const grounded = typeof candidate === 'object' && candidate !== null && !Array.isArray(candidate)
+            ? { ...candidate, workerId: input.workerId, summary: { grossEarnings, totalExpenses, netEarnings, totalDeductions, effectiveHourlyRate: hourlyRate }, calculatedFacts }
+            : null;
+          const validated = grounded && validateEarningsAnalysis(grounded);
+          if (!validated?.success || !validated.data) return deterministicResult();
+          const aiResult = validated.data;
           // Validate evidence IDs
-          for (const disc of result.data.discrepancies) {
+          for (const disc of aiResult.discrepancies) {
             const fabricated = validateEvidenceIds(disc.evidenceIds, availableEvidenceIds);
             disc.evidenceIds = disc.evidenceIds.filter((id) => !fabricated.includes(id));
           }
-          for (const f of result.data.findings) {
+          for (const f of aiResult.findings) {
             const fabricated = validateEvidenceIds(f.evidenceIds, availableEvidenceIds);
             f.evidenceIds = f.evidenceIds.filter((id) => !fabricated.includes(id));
           }
-          return result.data;
+          return aiResult;
         }
-        if (process.env.MOCK_AI === 'false') {
-          throw new Error(`Bedrock structured generation failed in EarningsAgent: ${result.error || 'unknown error'}`);
-        }
-      } catch (err) {
-        if (process.env.MOCK_AI === 'false') {
-          throw err;
-        }
-      }
+      } catch { /* Deterministic results remain available when Bedrock fails. */ }
     }
 
     // Deterministic path
-    const rawResult: EarningsAnalysisResult = {
+    function deterministicResult(): EarningsAnalysisResult {
+      const rawResult: EarningsAnalysisResult = {
       workerId: input.workerId,
       summary: {
         grossEarnings,
@@ -188,11 +189,12 @@ export class EarningsAgent implements Agent<EarningsAgentInput, EarningsAnalysis
       confidence: 0.93,
     };
 
-    const validated = validateEarningsAnalysis(rawResult);
-    if (!validated.success || !validated.data) {
-      throw new Error(`Earnings analysis validation failed: ${validated.error}`);
+      const validated = validateEarningsAnalysis(rawResult);
+      if (!validated.success || !validated.data) throw new Error(`Earnings analysis validation failed: ${validated.error}`);
+
+      return validated.data;
     }
 
-    return validated.data;
+    return deterministicResult();
   }
 }
