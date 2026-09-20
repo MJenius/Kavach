@@ -2,7 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { CasesPage } from '../../src/features/cases/CasesPage.tsx';
-import type { ReviewPackageNavigationState } from '../../src/features/cases/review-package.ts';
+import {
+  saveStoredReviewPackage,
+  getStoredReviewPackage,
+  type ReviewPackageNavigationState,
+} from '../../src/features/cases/review-package.ts';
 
 describe('Cases Page Flow & Rendering', () => {
   it('renders existing case list when navigating directly without investigation state', () => {
@@ -109,8 +113,6 @@ describe('Cases Page Flow & Rendering', () => {
   });
 
   it('persists and restores review packages via saveStoredReviewPackage and localStorage simulation', () => {
-    const { saveStoredReviewPackage, getStoredReviewPackage } = require('../../src/features/cases/review-package.ts');
-
     const testPackage: ReviewPackageNavigationState = {
       type: 'generated-review-package',
       caseId: 'case-001',
