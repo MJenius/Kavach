@@ -6,6 +6,7 @@ import { EarningsPage } from '../features/earnings/EarningsPage.tsx';
 import { CasesPage } from '../features/cases/CasesPage.tsx';
 import { AskKavachPage } from '../features/worker-twin/AskKavachPage.tsx';
 import { CaseDetailPage } from '../features/cases/CaseDetailPage.tsx';
+import { ArchitecturePage } from '../features/architecture/ArchitecturePage.tsx';
 
 /**
  * React Error Boundary — catches render-time exceptions in any child component
@@ -87,6 +88,7 @@ export const App: React.FC = () => {
           <Route path="/earnings" element={<EarningsPage />} />
           <Route path="/cases" element={<CasesPage />} />
           <Route path="/ask-kavach" element={<AskKavachPage />} />
+          <Route path="/architecture" element={<ArchitecturePage />} />
           <Route path="/worker-twin" element={<Navigate to="/ask-kavach" replace />} />
           
           {/* Redirects for old routes */}

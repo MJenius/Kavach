@@ -11,6 +11,7 @@ describe('UI Route & Page Rendering Verification', () => {
     { path: '/cases/case-trip-001/analysis', expectedText: 'Penalty Review' },
     { path: '/ask-kavach', expectedText: 'Ask Kavach' },
     { path: '/cases', expectedText: 'All Registered Cases' },
+    { path: '/architecture', expectedText: 'How Kavach turns evidence into verified worker intelligence.' },
   ];
 
   for (const route of routes) {

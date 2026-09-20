@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { isLiveApiConfigured } from '../api/mock-client.ts';
-import { ShieldIcon, DashboardIcon, WalletIcon, SparklesIcon } from './icons.tsx';
+import { ShieldIcon, DashboardIcon, WalletIcon, SparklesIcon, LinkIcon } from './icons.tsx';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -15,6 +15,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     { path: '/earnings', label: 'Earnings', icon: <WalletIcon size={16} /> },
     { path: '/cases', label: 'Cases', icon: <ShieldIcon size={16} /> },
     { path: '/ask-kavach', label: 'Ask Kavach', icon: <SparklesIcon size={16} /> },
+    { path: '/architecture', label: 'Architecture', icon: <LinkIcon size={16} /> },
   ];
 
   return (
