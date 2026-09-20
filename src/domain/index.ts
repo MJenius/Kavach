@@ -160,12 +160,23 @@ export interface WorkerTwinQuery {
   timeframe?: string;
 }
 
+export type WorkerTwinVerificationBadge =
+  | 'VERIFIED_DATA'
+  | 'SIMULATION_PROJECTION'
+  | 'POLICY_GUIDANCE'
+  | 'INSUFFICIENT_EVIDENCE';
+
 export interface WorkerTwinResponse {
   answer: string;
   projectedEarnings?: number;
   optimalHours?: string[];
   observedFactors: string[];
   confidence: number;
+  verificationBadge?: WorkerTwinVerificationBadge;
+  supportingTrips?: string[];
+  evidenceIds?: string[];
+  calculationDetails?: string;
+  isEvidenceBacked?: boolean;
 }
 
 /**
@@ -190,4 +201,27 @@ export interface ApiResponse<T> {
   data: T;
   message?: string;
   error?: string;
+}
+
+export interface FinancialSummary {
+  platformGrossPayout: number;
+  penalties: number;
+  incentives: number;
+  deductions: number;
+  platformNetPayout: number;
+  fuelExpenses: number;
+  phoneExpenses: number;
+  otherExpenses: number;
+  totalExpenses: number;
+  estimatedRealEarnings: number;
+  activeHours: number;
+  effectiveHourlyRate: number;
+  disputedAmount: number;
+  unresolvedAmount: number;
+  deliveryCount: number;
+
+  // Compatibility aliases
+  grossEarnings?: number;
+  netEarnings?: number;
+  discrepancyTotal?: number;
 }

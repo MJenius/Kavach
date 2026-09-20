@@ -34,13 +34,14 @@ export class MockAIService implements AIService {
 
   async investigateCase(caseId: string, contextData?: Record<string, unknown>): Promise<AIInvestigationResult> {
     const workerId = (contextData?.workerId as string) || 'worker-vikram-01';
+    const tripId = (contextData?.tripId as string) || (caseId.startsWith('trip-') ? caseId : 'trip-2026-09-15-001');
     const supervisor = new SupervisorAgent();
     const output = await supervisor.run({
       caseId,
       workerId,
-      tripId: caseId,
+      tripId,
       action: 'INVESTIGATE_CASE',
-      payload: contextData,
+      payload: { ...contextData, tripId },
     });
 
     if (!output.investigationResult) {
@@ -131,13 +132,14 @@ export class BedrockAIService implements AIService {
     // coordinating Forensics, Earnings, and Policy agents over real tools.
     // If Bedrock invocation fails in production, an error is thrown (do NOT silently fall back to Mock).
     const workerId = (contextData?.workerId as string) || 'worker-vikram-01';
+    const tripId = (contextData?.tripId as string) || (caseId.startsWith('trip-') ? caseId : 'trip-2026-09-15-001');
     const supervisor = new SupervisorAgent();
     const output = await supervisor.run({
       caseId,
       workerId,
-      tripId: caseId,
+      tripId,
       action: 'INVESTIGATE_CASE',
-      payload: contextData,
+      payload: { ...contextData, tripId },
     });
 
     if (!output.investigationResult) {

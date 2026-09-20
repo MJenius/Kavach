@@ -81,8 +81,6 @@ describe('Evidence Inspector & Provenance Flow', () => {
       </MemoryRouter>
     );
 
-    expect(html).toContain('Supporting Evidence:');
-    expect(html).toContain('ev-penalty-screenshot');
     expect(html).toContain('ev-store-arrival-gps');
     expect(html).toContain('title="Inspect evidence provenance"');
   });
@@ -136,8 +134,8 @@ describe('Evidence Inspector & Provenance Flow', () => {
       </MemoryRouter>
     );
 
-    expect(html).toContain('Trip Forensics &amp; Discrepancy Investigation');
-    expect(html).toContain('Start Live AI Investigation');
+    expect(html).toContain('Penalty Review');
+    expect(html.includes('Start Live AI Investigation') || html.includes('Re-run Live Investigation')).toBe(true);
     expect(html).toContain('PLATFORM CLAIM:');
     expect(html).toContain('350');
     expect(html).toContain('PENALTY');

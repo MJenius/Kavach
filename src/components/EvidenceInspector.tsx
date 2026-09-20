@@ -158,6 +158,13 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({ evidenceId
                   {relationshipType}
                 </div>
               </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>HASH (SHA-256)</div>
+                <div style={{ fontSize: '0.8rem', fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
+                  {/* Pseudo hash for UI demonstration */}
+                  0x{Array.from(evidenceId).reduce((h, c) => Math.imul(31, h) + c.charCodeAt(0) | 0, 0).toString(16).padEnd(64, '0')}
+                </div>
+              </div>
             </div>
 
             {/* Factual Description */}
@@ -168,6 +175,28 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({ evidenceId
               <p style={{ fontSize: '0.95rem', color: 'var(--text-primary)', lineHeight: 1.5, margin: 0 }}>
                 {evidence.description}
               </p>
+            </div>
+
+            {/* Raw Data */}
+            <div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
+                RAW DATA
+              </div>
+              <pre
+                style={{
+                  background: 'rgba(0, 0, 0, 0.4)',
+                  border: '1px solid var(--border-color)',
+                  padding: '0.75rem',
+                  borderRadius: '4px',
+                  fontFamily: 'monospace',
+                  fontSize: '0.8rem',
+                  color: 'var(--text-muted)',
+                  whiteSpace: 'pre-wrap',
+                  overflowX: 'auto',
+                }}
+              >
+                {JSON.stringify(evidence, null, 2)}
+              </pre>
             </div>
 
             {/* Artifact / URI Reference */}

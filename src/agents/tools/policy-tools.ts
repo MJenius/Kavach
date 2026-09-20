@@ -4,10 +4,10 @@ class MockPolicyRepository implements PolicyRepository {
   async findPolicy(platform: string, issueType: string) {
     if (platform === 'QuickBite' && (issueType === 'LATE_DELIVERY' || issueType === 'MERCHANT_DELAY')) {
       return {
-        policyName: 'QuickBite Partner SLA Policy',
-        clauseReference: 'Section 4.2.1 (Merchant Handover Delays)',
+        policyName: 'QuickBite Merchant Handover Terms',
+        clauseReference: 'Merchant Delay Policy',
         summaryText: 'Where store preparation delay exceeds 5 minutes, delivery partner SLA will be extended by equivalent wait time and penalties waived upon evidence.',
-        sourceUri: 'https://partner.quickbite.in/policies/sla-exemptions#4.2.1',
+        sourceUri: 'https://partner.quickbite.in/policies/merchant-delays',
       };
     }
     return null;

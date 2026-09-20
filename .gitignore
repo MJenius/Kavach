@@ -24,3 +24,6 @@ Thumbs.db
 # SAM / AWS build artifacts
 .aws-sam/
 .kilo/
+dist-lambda/
+scratch/
+test_out.txt

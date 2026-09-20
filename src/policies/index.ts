@@ -23,9 +23,9 @@ export interface PolicyRepository {
 export class MockPolicyRepository implements PolicyRepository {
   private policies: PlatformPolicy[] = [
     {
-      id: 'pol-qb-4.2.1',
+      id: 'pol-qb-merchant-delay',
       platform: 'QuickBite',
-      section: '4.2.1',
+      section: 'Merchant Delay Policy',
       title: 'Merchant Handover Delays',
       content:
         'When order preparation exceeds 5 minutes at store, delivery partner SLA must automatically adjust or be waived upon evidence submission.',

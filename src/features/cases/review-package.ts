@@ -10,6 +10,8 @@ export interface ReviewPackageNavigationState {
   caseStatus: 'READY' | 'REVIEW' | 'DRAFT' | 'ANALYZING' | 'RESOLVED';
   investigation: AIInvestigationResult;
   timeline: TripEvent[];
+  packageUri?: string;
+  generatedAt?: string;
 }
 
 export interface GenerateReviewPackageParams {
@@ -19,6 +21,52 @@ export interface GenerateReviewPackageParams {
   disputedAmount: number;
   investigation: AIInvestigationResult;
   timeline: TripEvent[];
+}
+
+const STORAGE_KEY_PREFIX = 'kavach_review_package_';
+const inMemoryFallbackStore = new Map<string, string>();
+
+/**
+ * Persist generated review package state into localStorage (or memory in Node/SSR) for seamless reload persistence.
+ */
+export function saveStoredReviewPackage(state: ReviewPackageNavigationState): void {
+  const jsonStr = JSON.stringify({ ...state, savedAt: new Date().toISOString() });
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(`${STORAGE_KEY_PREFIX}${state.caseId}`, jsonStr);
+      window.localStorage.setItem(`${STORAGE_KEY_PREFIX}last`, jsonStr);
+    }
+  } catch (e) {
+    console.warn('Unable to persist package to localStorage', e);
+  }
+  inMemoryFallbackStore.set(`${STORAGE_KEY_PREFIX}${state.caseId}`, jsonStr);
+  inMemoryFallbackStore.set(`${STORAGE_KEY_PREFIX}last`, jsonStr);
+}
+
+/**
+ * Retrieve persisted review package state for a case from localStorage (or memory in Node/SSR).
+ */
+export function getStoredReviewPackage(caseId?: string): ReviewPackageNavigationState | null {
+  const key = caseId ? `${STORAGE_KEY_PREFIX}${caseId}` : `${STORAGE_KEY_PREFIX}last`;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw = window.localStorage.getItem(key);
+      if (raw) {
+        return JSON.parse(raw) as ReviewPackageNavigationState;
+      }
+    }
+  } catch (e) {
+    console.warn('Unable to read persisted package from localStorage', e);
+  }
+  const fallbackRaw = inMemoryFallbackStore.get(key);
+  if (fallbackRaw) {
+    try {
+      return JSON.parse(fallbackRaw) as ReviewPackageNavigationState;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 /**
@@ -118,7 +166,7 @@ export function generateReviewPackage(params: GenerateReviewPackageParams): stri
       lines.push(`${index + 1}. ${action}`);
     });
   } else {
-    lines.push('1. Review documented timeline and consider penalty waiver.');
+    lines.push('1. Review documented timeline and consider penalty waiver under merchant-delay policy.');
   }
   lines.push('');
 

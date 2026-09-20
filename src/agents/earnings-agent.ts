@@ -156,8 +156,13 @@ export class EarningsAgent implements Agent<EarningsAgentInput, EarningsAnalysis
           }
           return result.data;
         }
-      } catch {
-        // Fall through to deterministic path
+        if (process.env.MOCK_AI === 'false') {
+          throw new Error(`Bedrock structured generation failed in EarningsAgent: ${result.error || 'unknown error'}`);
+        }
+      } catch (err) {
+        if (process.env.MOCK_AI === 'false') {
+          throw err;
+        }
       }
     }
 

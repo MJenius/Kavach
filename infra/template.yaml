@@ -149,17 +149,56 @@ Resources:
         StartAt: IngestEvidence
         States:
           IngestEvidence:
-            Type: Pass
-            Result: "Evidence Ingested"
+            Type: Task
+            Resource: "arn:aws:states:::lambda:invoke"
+            Parameters:
+              FunctionName: !GetAtt KavachApiFunction.Arn
+              Payload:
+                action: "INGEST_EVIDENCE"
+                caseId.$: "$.caseId"
+                workerId.$: "$.workerId"
+                tripId.$: "$.tripId"
+            ResultPath: "$.evidenceResult"
             Next: RunSupervisorAgent
+            Retry:
+              - ErrorEquals:
+                  - "States.TaskFailed"
+                IntervalSeconds: 2
+                MaxAttempts: 2
+                BackoffRate: 2
           RunSupervisorAgent:
-            Type: Pass
-            Result: "Supervisor Completed"
+            Type: Task
+            Resource: "arn:aws:states:::lambda:invoke"
+            Parameters:
+              FunctionName: !GetAtt KavachApiFunction.Arn
+              Payload:
+                action: "INVESTIGATE_CASE"
+                caseId.$: "$.caseId"
+                workerId.$: "$.workerId"
+                tripId.$: "$.tripId"
+                evidenceResult.$: "$.evidenceResult"
+            ResultPath: "$.investigationResult"
             Next: ReconcileDecision
+            Retry:
+              - ErrorEquals:
+                  - "States.TaskFailed"
+                IntervalSeconds: 3
+                MaxAttempts: 2
+                BackoffRate: 2
           ReconcileDecision:
-            Type: Pass
-            Result: "Decision Reconciled"
+            Type: Task
+            Resource: "arn:aws:states:::lambda:invoke"
+            Parameters:
+              FunctionName: !GetAtt KavachApiFunction.Arn
+              Payload:
+                action: "RECONCILE_DECISION"
+                caseId.$: "$.caseId"
+                investigation.$: "$.investigationResult.Payload"
+            ResultPath: "$.reconciliationResult"
             End: true
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref KavachApiFunction
 
   # ============================================================================
   # 5. EVENTBRIDGE (Event Bus) - Person 3

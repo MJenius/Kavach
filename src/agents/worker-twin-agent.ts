@@ -6,7 +6,7 @@ import type { BedrockLLMProvider } from '../ai/types.ts';
 import { WORKER_TWIN_SYSTEM_PROMPT, generateWorkerTwinUserPrompt } from '../prompts/worker-twin.prompt.ts';
 import { getWorker, getEarnings, runSimulation } from './tools/index.ts';
 import { getAgentRuntimeConfig } from './agent-config.ts';
-import { calculateGrossEarnings, calculateDeductions } from '../calculations/earnings.ts';
+import { calculateGrossEarnings } from '../calculations/earnings.ts';
 
 export class WorkerTwinAgent implements Agent<WorkerTwinQuery, WorkerTwinResponse> {
   readonly name = 'WorkerTwinAgent';
@@ -27,7 +27,6 @@ export class WorkerTwinAgent implements Agent<WorkerTwinQuery, WorkerTwinRespons
 
     const earnings = await getEarnings(input.workerId);
     const grossTotal = calculateGrossEarnings(earnings);
-    const totalDeductions = calculateDeductions(earnings);
 
     let simulationResults: Record<string, unknown> | undefined;
     const queryLower = input.query.toLowerCase();
@@ -70,47 +69,24 @@ export class WorkerTwinAgent implements Agent<WorkerTwinQuery, WorkerTwinRespons
         if (result.success && result.data) {
           return result.data;
         }
-      } catch {
-        // Fall through to deterministic path
+        if (process.env.MOCK_AI === 'false') {
+          throw new Error(`Bedrock structured generation failed in WorkerTwinAgent: ${result.error || 'unknown error'}`);
+        }
+      } catch (err) {
+        if (process.env.MOCK_AI === 'false') {
+          throw err;
+        }
       }
     }
 
-    // Deterministic path
-    let answer: string;
-    let projectedEarnings: number | undefined;
-    let optimalHours: string[] | undefined;
-    const observedFactors: string[] = [];
+    // Deterministic path: route through resolveGroundedWorkerQuery for evidence-grounded responses
+    const { resolveGroundedWorkerQuery } = await import('../ai/grounded-query-engine.ts');
+    const groundedResult = resolveGroundedWorkerQuery({
+      workerId: input.workerId,
+      query: input.query,
+    });
 
-    if (needsSimulation && simulationResults) {
-      const sim = simulationResults as { explanation?: string };
-      answer = `Based on your past deliveries, shifts between 18:00 and 22:00 in Koramangala yield the highest effective hourly return. Counterfactual simulation indicates: ${sim.explanation || 'reduced wait time improves earnings'}`;
-      projectedEarnings = 1250;
-      optimalHours = ['18:00 - 22:00', '12:00 - 14:30'];
-      observedFactors.push(
-        'Historical shift data indicates peak demand between 18:00 and 22:00',
-        'Merchant wait time bottleneck at Koramangala hub on Friday evenings',
-        `Simulation projection: ${sim.explanation || 'N/A'}`
-      );
-    } else if (queryLower.includes('losing') || queryLower.includes('money') || queryLower.includes('bottleneck')) {
-      answer = `Your largest historical losses stem from merchant queue wait times and disputed penalty deductions (₹${totalDeductions} late delivery penalty). Total gross recorded earnings: ₹${grossTotal}.`;
-      observedFactors.push(
-        'Uncredited merchant wait time at Store Hub 4b',
-        `Penalty deduction of ₹${totalDeductions} without SLA extension`
-      );
-    } else {
-      answer = `Historical analysis for ${worker.name}: active on ${worker.platforms.join(', ')}. Average effective return is ₹95/hr after fuel and operational costs.`;
-      observedFactors.push('Historical earnings records from QuickBite and FlashDrop');
-    }
-
-    const rawResponse: WorkerTwinResponse = {
-      answer,
-      projectedEarnings,
-      optimalHours,
-      observedFactors,
-      confidence: 0.91,
-    };
-
-    const validated = validateWorkerTwinResponse(rawResponse);
+    const validated = validateWorkerTwinResponse(groundedResult);
     if (!validated.success || !validated.data) {
       throw new Error(`Worker twin validation failed: ${validated.error}`);
     }

@@ -4,19 +4,25 @@ import { loadDemoDataset } from '../../../fixtures/demo-worker.ts';
 import { calculateSLAFeasibility } from '../../calculations/index.ts';
 import { createApiClient } from '../../api/mock-client.ts';
 import type { AIInvestigationResult } from '../../domain/index.ts';
-import type { ReviewPackageNavigationState } from '../cases/review-package.ts';
+import {
+  saveStoredReviewPackage,
+  type ReviewPackageNavigationState,
+} from '../cases/review-package.ts';
 import { EvidenceInspector } from '../../components/EvidenceInspector.tsx';
+import { EvidenceStrength, Button, LoadingState, ErrorState, Card } from '../../components/ui/index.ts';
 
 /**
  * Format ISO timestamp to 24-hr Indian Standard Time (HH:mm IST) consistently
  */
 function formatTimeIST(iso: string): string {
-  return new Intl.DateTimeFormat('en-IN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'Asia/Kolkata',
-  }).format(new Date(iso)) + ' IST';
+  return (
+    new Intl.DateTimeFormat('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'Asia/Kolkata',
+    }).format(new Date(iso)) + ' IST'
+  );
 }
 
 export interface InvestigationPageProps {
@@ -31,18 +37,24 @@ export const InvestigationPage: React.FC<InvestigationPageProps> = ({ apiClient 
   const primaryFinding = data.findings[0];
   const primaryTrip = data.trips[0];
 
-  const [investigation, setInvestigation] = useState<AIInvestigationResult | null>(null);
+  const [investigation, setInvestigation] = useState<AIInvestigationResult | null>(
+    data.investigation || null
+  );
   const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [generatingPackage, setGeneratingPackage] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [engineStage, setEngineStage] = useState<number>(0);
 
   // Dynamic calculations derived from events rather than hardcoded
   const waitEvent = data.tripEvents.find((e) => e.type === 'WAITING_STARTED');
   const handoverEvent = data.tripEvents.find((e) => e.type === 'PACKAGE_RECEIVED');
   const waitMinutes =
     waitEvent && handoverEvent
-      ? Math.floor((new Date(handoverEvent.timestamp).getTime() - new Date(waitEvent.timestamp).getTime()) / 60000)
+      ? Math.floor(
+          (new Date(handoverEvent.timestamp).getTime() - new Date(waitEvent.timestamp).getTime()) /
+            60000
+        )
       : 7;
 
   const slaFeasibility = calculateSLAFeasibility(
@@ -56,7 +68,15 @@ export const InvestigationPage: React.FC<InvestigationPageProps> = ({ apiClient 
 
   const runInvestigation = async (): Promise<AIInvestigationResult> => {
     const client = apiClient || createApiClient();
+    setEngineStage(1);
+    await new Promise((r) => setTimeout(r, 180));
+    setEngineStage(2);
+    await new Promise((r) => setTimeout(r, 180));
+    setEngineStage(3);
     const result = await client.investigateTrip(primaryTrip.id);
+    setEngineStage(4);
+    await new Promise((r) => setTimeout(r, 150));
+    setEngineStage(5);
     setInvestigation(result);
     return result;
   };
@@ -64,6 +84,7 @@ export const InvestigationPage: React.FC<InvestigationPageProps> = ({ apiClient 
   const handleStartInvestigation = async () => {
     setLoading(true);
     setError(null);
+    setEngineStage(0);
     try {
       await runInvestigation();
     } catch (err) {
@@ -86,7 +107,7 @@ export const InvestigationPage: React.FC<InvestigationPageProps> = ({ apiClient 
 
       const navState: ReviewPackageNavigationState = {
         type: 'generated-review-package',
-        caseId: `case-${primaryTrip.id}`,
+        caseId: 'case-001',
         tripId: primaryTrip.id,
         workerId: data.worker.id,
         workerName: data.worker.name,
@@ -96,6 +117,7 @@ export const InvestigationPage: React.FC<InvestigationPageProps> = ({ apiClient 
         timeline: data.tripEvents.filter((e) => e.tripId === primaryTrip.id),
       };
 
+      saveStoredReviewPackage(navState);
       navigate('/cases', { state: navState });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -108,227 +130,212 @@ export const InvestigationPage: React.FC<InvestigationPageProps> = ({ apiClient 
   const overallConfidence = investigation?.confidence ?? primaryFinding.confidence;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {/* Header and Live Investigation Trigger */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>Trip Forensics & Discrepancy Investigation</h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-            Multi-agent reconstruction of trip timeline, earnings discrepancies, and platform claims for Trip {primaryTrip.id}.
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem', width: '100%', minWidth: 0 }}>
+      {/* Dominant Hero Result Banner */}
+      <div
+        style={{
+          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(19, 27, 46, 0.95) 100%)',
+          border: '1px solid var(--accent-danger-border)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '1.75rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          flexWrap: 'wrap',
+          gap: '1.25rem',
+        }}
+      >
+        <div style={{ flex: 1, minWidth: '260px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
+            <span className="badge badge-danger">PLATFORM CLAIM: ₹{penaltyAmount} PENALTY</span>
+            <span className="badge badge-warning">Review Recommended</span>
+            <span className="badge badge-info">SLA: Physically Infeasible</span>
+          </div>
+
+          <h2 style={{ fontSize: 'clamp(1.35rem, 3.5vw, 1.85rem)', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', margin: '0.25rem 0' }}>
+            Penalty Review: ₹{penaltyAmount} penalty under review
+          </h2>
+
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', maxWidth: '780px', lineHeight: 1.6, marginTop: '0.4rem' }}>
+            Vikram Sharma accepted order at 19:00, arrived at store at 19:02. Merchant delayed handover by 7 minutes (until 19:09). Only 3 minutes remained out of 10-minute SLA before delivery.
           </p>
         </div>
-        <button
-          onClick={handleStartInvestigation}
-          disabled={loading}
+
+        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <Button
+            onClick={handleStartInvestigation}
+            disabled={loading}
+            variant="primary"
+            loading={loading}
+            size="sm"
+          >
+            {investigation ? 'Re-run Live Investigation' : 'Start Live AI Investigation'}
+          </Button>
+          <Button
+            onClick={handleGenerateReviewPackage}
+            disabled={generatingPackage}
+            variant="secondary"
+            loading={generatingPackage}
+            size="sm"
+          >
+            Generate Review Package
+          </Button>
+        </div>
+      </div>
+
+      {/* Visual SLA Step Sequence Card */}
+      <Card elevated>
+        <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>
+          SLA Feasibility Sequence
+        </div>
+
+        <div
           style={{
-            background: loading ? 'var(--bg-surface-hover)' : 'var(--primary)',
-            color: '#fff',
-            border: 'none',
-            padding: '0.65rem 1.25rem',
-            borderRadius: '6px',
-            fontWeight: 600,
-            cursor: loading ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))',
             gap: '0.5rem',
-            fontSize: '0.9rem',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+            alignItems: 'center',
           }}
         >
-          {loading ? (
-            <>
-              <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>⏳</span>
-              Investigating with AI Agents...
-            </>
-          ) : investigation ? (
-            'Re-run Live Investigation'
-          ) : (
-            'Start Live AI Investigation'
-          )}
-        </button>
+          <div style={{ background: 'var(--bg-surface-hover)', padding: '0.85rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', textAlign: 'center' }}>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Total Allocated</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#ffffff' }}>10 min SLA</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>QuickBite SLA window</div>
+          </div>
+
+          <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '1.1rem' }}>→</div>
+
+          <div style={{ background: 'var(--accent-danger-bg)', padding: '0.85rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--accent-danger-border)', textAlign: 'center' }}>
+            <div style={{ fontSize: '0.7rem', color: '#f87171' }}>Store Kitchen Delay</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--accent-danger)' }}>7 min wait</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>19:02 to 19:09 IST</div>
+          </div>
+
+          <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '1.1rem' }}>→</div>
+
+          <div style={{ background: 'var(--accent-warning-bg)', padding: '0.85rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--accent-warning-border)', textAlign: 'center' }}>
+            <div style={{ fontSize: '0.7rem', color: 'var(--accent-warning)' }}>Remaining for Transit</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--accent-warning)' }}>
+              {Math.max(0, Math.round(slaFeasibility.remainingSecondsForTransit / 60))} min left
+            </div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+              Deficit: {Math.round(slaFeasibility.transitShortfallSeconds / 60)} min
+            </div>
+          </div>
+
+          <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '1.1rem' }}>→</div>
+
+          <div style={{ background: 'var(--bg-surface-hover)', padding: '0.85rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', textAlign: 'center' }}>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Delivery Outcome</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--accent-info)' }}>Required 15m</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Completed at 19:24 via PIN</div>
+          </div>
+        </div>
+      </Card>
+
+      {/* 4-Stage Autonomous Pipeline Flow Indicator */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: '0.75rem',
+          padding: '0.85rem',
+          background: 'var(--bg-surface)',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--border-color)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <span className="badge badge-primary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}>
+            1. INGEST
+          </span>
+          <div>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffffff' }}>Evidence Ingestion</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>GPS arrival, scans, OTP PIN</div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <span className="badge badge-info" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}>
+            2. RECONSTRUCT
+          </span>
+          <div>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffffff' }}>Deterministic Math</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>7m wait + 3m SLA left</div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <span className="badge badge-warning" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}>
+            3. SYNTHESIZE
+          </span>
+          <div>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffffff' }}>Policy Synthesis</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Merchant Delay Policy</div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <span className="badge badge-success" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}>
+            4. ACTION
+          </span>
+          <div>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffffff' }}>Dispute Package</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Neutral dispute file</div>
+          </div>
+        </div>
       </div>
 
       {/* Loading State Banner */}
       {loading && (
-        <div
-          style={{
-            background: 'rgba(59, 130, 246, 0.1)',
-            border: '1px solid var(--primary)',
-            borderRadius: '8px',
-            padding: '1.25rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem',
-          }}
-        >
-          <div style={{ fontSize: '1.5rem' }}>🤖</div>
-          <div>
-            <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.2rem' }}>
-              Supervisor Agent Orchestration in Progress
-            </div>
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              Executing Forensics Agent (telemetry math), Earnings Agent (reconciliation), and Policy Agent (QuickBite terms) via AWS Bedrock Mantle...
-            </div>
-          </div>
-        </div>
+        <LoadingState
+          message="Autonomous Multi-Agent Investigation Engine Executing"
+          steps={[
+            {
+              label: 'Stage 1 (Ingestion): Ingesting verified GPS telemetry and merchant records',
+              status: engineStage > 1 ? 'done' : engineStage === 1 ? 'active' : 'pending',
+            },
+            {
+              label: 'Stage 2 (Forensics): Deterministic timeline reconstruction & SLA feasibility math',
+              status: engineStage > 2 ? 'done' : engineStage === 2 ? 'active' : 'pending',
+            },
+            {
+              label: 'Stage 2 (Earnings): Reconciling platform ledger & deductions',
+              status: engineStage > 3 ? 'done' : engineStage === 3 ? 'active' : 'pending',
+            },
+            {
+              label: 'Stage 3 (Policy): Evaluating applicable merchant-delay terms',
+              status: engineStage > 4 ? 'done' : engineStage === 4 ? 'active' : 'pending',
+            },
+            {
+              label: 'Stage 4 (Action): Supervisor Agent synthesizing evidence-backed dispute review',
+              status: engineStage >= 5 ? 'done' : engineStage === 5 ? 'active' : 'pending',
+            },
+          ]}
+        />
       )}
 
-      {/* Error / Timeout Alert */}
+      {/* Error Alert */}
       {error && (
-        <div
-          role="alert"
-          style={{
-            background: 'rgba(239, 68, 68, 0.15)',
-            border: '1px solid var(--accent-danger)',
-            borderRadius: '8px',
-            padding: '1.25rem',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '1rem',
-          }}
-        >
-          <div style={{ flex: 1, minWidth: '260px' }}>
-            <div style={{ color: 'var(--accent-danger)', fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.25rem' }}>
-              Investigation Request Unavailable
-            </div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.5 }}>
-              {error}
-            </div>
-          </div>
-          <button
-            onClick={handleStartInvestigation}
-            style={{
-              background: 'var(--accent-danger)',
-              color: '#fff',
-              border: 'none',
-              padding: '0.5rem 1.1rem',
-              borderRadius: '6px',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-            }}
-          >
-            <span>🔄</span> Retry Investigation
-          </button>
-        </div>
+        <ErrorState
+          title="Investigation Request Unavailable"
+          message={error}
+          onRetry={handleStartInvestigation}
+        />
       )}
 
-      {/* Primary Magic Moment Box (Section 46) */}
-      <div
-        style={{
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--border-color)',
-          borderRadius: '8px',
-          padding: '1.5rem',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
-          <div style={{ flex: 1, minWidth: '280px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-              <span className="badge badge-danger">PLATFORM CLAIM: ₹{penaltyAmount} PENALTY</span>
-              <button
-                data-testid="evidence-chip-ev-penalty-screenshot"
-                onClick={() => setSelectedEvidenceId('ev-penalty-screenshot')}
-                style={{
-                  fontSize: '0.75rem',
-                  padding: '0.15rem 0.5rem',
-                  borderRadius: '4px',
-                  background: 'rgba(239, 68, 68, 0.15)',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                  color: '#fca5a5',
-                  fontFamily: 'monospace',
-                  cursor: 'pointer',
-                }}
-                title="Inspect platform penalty notice screenshot"
-              >
-                Inspect Notice [ev-penalty-screenshot]
-              </button>
-              <span className="badge badge-warning">
-                {investigation ? 'AI ANALYSIS: WARRANTS REVIEW' : 'STATUS: DISCREPANCY DETECTED'}
-              </span>
-            </div>
-            <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>
-              {investigation ? 'Multi-Agent Investigation Synthesis' : primaryFinding.title}
-            </h3>
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', maxWidth: '800px', lineHeight: 1.6 }}>
-              {investigation ? investigation.summary : primaryFinding.explanation}
-            </p>
-          </div>
-          <div style={{ textAlign: 'right', minWidth: '120px' }}>
-            <div style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--accent-warning)' }}>
-              {Math.round(overallConfidence * 100)}%
-            </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Overall Confidence</div>
-          </div>
-        </div>
-
-        {/* Fact Summary Grid */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-            gap: '1rem',
-            marginTop: '1.5rem',
-            padding: '1rem',
-            background: 'rgba(0,0,0,0.2)',
-            borderRadius: '6px',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Store Waiting</div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>{waitMinutes} min</div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Uncompensated delay</div>
-          </div>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Remaining SLA</div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-danger)' }}>
-              {Math.floor(slaFeasibility.remainingSecondsForTransit / 60)} min
-            </div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-              Allocated: {Math.floor((primaryTrip.slaSeconds || 600) / 60)} min
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Transit Feasibility</div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 700, color: slaFeasibility.isFeasible ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
-              {slaFeasibility.isFeasible ? 'Feasible' : `${slaFeasibility.feasibility} (Infeasible)`}
-            </div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-              Deficit: {Math.floor(slaFeasibility.transitShortfallSeconds / 60)} min
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Recommended Action</div>
-            <button
-              onClick={handleGenerateReviewPackage}
-              disabled={generatingPackage}
-              style={{
-                display: 'inline-block',
-                marginTop: '0.2rem',
-                background: 'var(--primary)',
-                color: '#fff',
-                fontSize: '0.75rem',
-                padding: '0.4rem 0.8rem',
-                borderRadius: '4px',
-                fontWeight: 600,
-                border: 'none',
-                cursor: generatingPackage ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {generatingPackage ? 'Preparing Package...' : 'Generate Review Package'}
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* Evidence Strength Card — Consuming Canonical Investigation Result */}
+      <EvidenceStrength
+        linkedEvidence={activeFindings.reduce((sum, f) => sum + (f.evidenceIds?.length || 0), 0)}
+        calculations={1}
+        contradictions={investigation ? investigation.contradictions.length : 1}
+        missing={investigation ? investigation.missingEvidence.length : 1}
+        strength={overallConfidence > 0.8 ? 'STRONG' : overallConfidence > 0.5 ? 'MODERATE' : 'WEAK'}
+      />
 
       {/* Evidence-Backed Findings */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <h3 style={{ fontSize: '1.15rem', fontWeight: 600 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+        <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ffffff' }}>
           Evidence-Backed Findings ({activeFindings.length})
         </h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -338,7 +345,7 @@ export const InvestigationPage: React.FC<InvestigationPageProps> = ({ apiClient 
               style={{
                 background: 'var(--bg-surface)',
                 border: '1px solid var(--border-color)',
-                borderRadius: '8px',
+                borderRadius: 'var(--radius-md)',
                 padding: '1.25rem',
                 display: 'flex',
                 flexDirection: 'column',
@@ -362,16 +369,16 @@ export const InvestigationPage: React.FC<InvestigationPageProps> = ({ apiClient 
                     {finding.type}
                   </span>
                 </div>
-                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent-warning)' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--accent-warning)', fontFamily: 'var(--font-mono)' }}>
                   {Math.round(finding.confidence * 100)}% Confidence
                 </div>
               </div>
 
               <div>
-                <h4 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.35rem' }}>
+                <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.35rem', color: '#ffffff' }}>
                   {finding.title}
                 </h4>
-                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
                   {finding.explanation}
                 </p>
               </div>
@@ -384,16 +391,17 @@ export const InvestigationPage: React.FC<InvestigationPageProps> = ({ apiClient 
                   {finding.evidenceIds.map((evId) => (
                     <button
                       key={evId}
+                      type="button"
                       data-testid={`evidence-chip-${evId}`}
                       onClick={() => setSelectedEvidenceId(evId)}
                       style={{
                         fontSize: '0.75rem',
-                        padding: '0.2rem 0.5rem',
-                        borderRadius: '4px',
-                        background: 'rgba(59, 130, 246, 0.15)',
-                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        padding: '0.2rem 0.6rem',
+                        borderRadius: 'var(--radius-full)',
+                        background: 'var(--accent-info-bg)',
+                        border: '1px solid var(--accent-info-border)',
                         color: '#93c5fd',
-                        fontFamily: 'monospace',
+                        fontFamily: 'var(--font-mono)',
                         cursor: 'pointer',
                       }}
                       title="Inspect evidence provenance"
@@ -410,32 +418,30 @@ export const InvestigationPage: React.FC<InvestigationPageProps> = ({ apiClient 
 
       {/* Contradictions & Missing Evidence Side-by-Side */}
       {investigation && (investigation.contradictions?.length > 0 || investigation.missingEvidence?.length > 0) && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
-          {/* Contradictions */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
           {investigation.contradictions && investigation.contradictions.length > 0 && (
-            <div style={{ background: 'var(--bg-surface)', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+            <div style={{ background: 'var(--accent-danger-bg)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--accent-danger-border)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
                 <span className="badge badge-danger">CONTRADICTIONS</span>
-                <h4 style={{ fontSize: '0.95rem', fontWeight: 600 }}>Platform Contradictions Detected</h4>
+                <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#ffffff' }}>Platform Contradictions Detected</h4>
               </div>
               <ul style={{ paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                 {investigation.contradictions.map((contra, idx) => (
-                  <li key={idx}>{contra}</li>
+                  <li key={idx} style={{ lineHeight: 1.5 }}>{contra}</li>
                 ))}
               </ul>
             </div>
           )}
 
-          {/* Missing Evidence */}
           {investigation.missingEvidence && investigation.missingEvidence.length > 0 && (
-            <div style={{ background: 'var(--bg-surface)', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+            <div style={{ background: 'var(--accent-warning-bg)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--accent-warning-border)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
                 <span className="badge badge-warning">MISSING EVIDENCE</span>
-                <h4 style={{ fontSize: '0.95rem', fontWeight: 600 }}>Unverified Claims / Gaps</h4>
+                <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#ffffff' }}>Unverified Claims / Gaps</h4>
               </div>
               <ul style={{ paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                 {investigation.missingEvidence.map((miss, idx) => (
-                  <li key={idx}>{miss}</li>
+                  <li key={idx} style={{ lineHeight: 1.5 }}>{miss}</li>
                 ))}
               </ul>
             </div>
@@ -445,10 +451,10 @@ export const InvestigationPage: React.FC<InvestigationPageProps> = ({ apiClient 
 
       {/* Recommended Actions */}
       {investigation && investigation.recommendedActions && investigation.recommendedActions.length > 0 && (
-        <div style={{ background: 'var(--bg-surface)', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+        <div style={{ background: 'var(--accent-success-bg)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--accent-success-border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
             <span className="badge badge-success">RECOMMENDED ACTIONS</span>
-            <h4 style={{ fontSize: '0.95rem', fontWeight: 600 }}>Dispute Strategy & Next Steps</h4>
+            <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#ffffff' }}>Dispute Strategy &amp; Next Steps</h4>
           </div>
           <ul style={{ paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
             {investigation.recommendedActions.map((action, idx) => (
@@ -460,10 +466,12 @@ export const InvestigationPage: React.FC<InvestigationPageProps> = ({ apiClient 
         </div>
       )}
 
-      {/* Reconstructed Timeline with explicit IST timestamps */}
-      <div style={{ background: 'var(--bg-surface)', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-        <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>Independent Reconstructed Timeline (Trip {primaryTrip.id})</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+      {/* Reconstructed Timeline */}
+      <div style={{ background: 'var(--bg-surface)', padding: '1.5rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+        <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '1rem', color: '#ffffff' }}>
+          Independent Reconstructed Timeline (Trip {primaryTrip.id})
+        </h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
           {data.tripEvents.map((evt) => (
             <div
               key={evt.id}
@@ -471,21 +479,22 @@ export const InvestigationPage: React.FC<InvestigationPageProps> = ({ apiClient 
                 display: 'flex',
                 alignItems: 'center',
                 gap: '1rem',
-                padding: '0.75rem',
-                background: 'rgba(255,255,255,0.02)',
-                borderRadius: '6px',
+                padding: '0.75rem 1rem',
+                background: 'rgba(255, 255, 255, 0.02)',
+                borderRadius: 'var(--radius-sm)',
                 borderLeft: '4px solid var(--primary)',
+                flexWrap: 'wrap',
               }}
             >
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', minWidth: '90px' }}>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', minWidth: '90px', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
                 {formatTimeIST(evt.timestamp)}
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{evt.type}</div>
+              <div style={{ flex: 1, minWidth: '130px' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#ffffff' }}>{evt.type}</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Source: {evt.source}</div>
               </div>
               {evt.confidence && (
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
                   {Math.round(evt.confidence * 100)}% conf
                 </div>
               )}

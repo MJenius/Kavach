@@ -13,7 +13,9 @@ import {
   demoEarnings,
   demoExpenses,
   demoCases,
+  canonicalInvestigationResult,
 } from '../../fixtures/demo-worker.ts';
+import { resolveGroundedWorkerQuery } from '../ai/grounded-query-engine.ts';
 
 /**
  * MockApiClient implements KavachApiClient purely in-memory using canonical fixtures.
@@ -60,48 +62,15 @@ export class MockApiClient implements KavachApiClient {
     return demoCases.find((c) => c.id === caseId) || null;
   }
 
-  async investigateTrip(tripId: string): Promise<AIInvestigationResult> {
-    return {
-      summary: `Multi-agent investigation for trip ${tripId}: Merchant wait time of 7 minutes left insufficient transit time (3m remaining of 10m SLA). Penalty of ₹350 is contested by verified telemetry.`,
-      findings: [
-        {
-          id: 'finding-late-penalty-01',
-          type: 'DECISION_REVIEW',
-          severity: 'HIGH',
-          title: 'Late delivery penalty warrants review due to merchant queue delay',
-          explanation:
-            'Platform levied a ₹350 penalty citing late delivery. Evidence confirms worker arrived at merchant at 19:02 but experienced 7 minutes of uncompensated merchant delay before package handover at 19:09, leaving insufficient SLA for delivery.',
-          confidence: 0.94,
-          evidenceIds: [
-            'ev-store-arrival-gps',
-            'ev-merchant-log',
-            'ev-merchant-handover-scan',
-            'ev-wait-calc',
-            'ev-traffic-alert-koramangala',
-            'ev-customer-delivery-otp',
-          ],
-        },
-      ],
-      missingEvidence: ['Customer app delivery handover photo'],
-      contradictions: [
-        'Platform dispatched order expecting 10m total SLA, but merchant preparation consumed 7 minutes without auto-extending SLA',
-      ],
-      recommendedActions: [
-        'Available evidence indicates uncompensated merchant delay; recommend submitting dispute package with GPS arrival and scan telemetry',
-        'Request platform administrative re-evaluation of ₹350 penalty based on uncredited merchant wait time',
-      ],
-      confidence: 0.94,
-    };
+  async investigateTrip(_tripId: string): Promise<AIInvestigationResult> {
+    return canonicalInvestigationResult;
   }
 
   async queryWorkerTwin(query: WorkerTwinQuery): Promise<WorkerTwinResponse> {
-    return {
-      answer: `Analysis for ${query.workerId}: Shift earnings peak between 18:00 - 22:00 in Koramangala. Avoiding Merchant Hub 4b during Friday rush increases effective hourly wage by ~18%.`,
-      projectedEarnings: 1250,
-      optimalHours: ['18:00 - 22:00'],
-      observedFactors: ['Merchant wait times', 'Peak surge incentives'],
-      confidence: 0.91,
-    };
+    return resolveGroundedWorkerQuery({
+      workerId: query.workerId,
+      query: query.query,
+    });
   }
 
   async generateEvidencePackage(caseId: string): Promise<{ packageUri: string; generatedAt: string }> {

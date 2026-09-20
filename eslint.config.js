@@ -31,12 +31,14 @@ export default [
     },
     rules: {
       'no-unused-vars': 'off',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }
+      ],
       'no-undef': 'off',
     },
   },
   {
-    ignores: ['dist/**', 'dist-lambda/**', 'build/**', 'node_modules/**', '.aws-sam/**', 'coverage/**'],
+    ignores: ['dist/**', 'dist-lambda/**', 'build/**', 'node_modules/**', '.aws-sam/**', 'coverage/**', 'scratch/**'],
   },
 ];
-

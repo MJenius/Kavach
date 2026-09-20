@@ -89,6 +89,7 @@ export class SupervisorAgent implements Agent<SupervisorInput, SupervisorOutput>
     agentResults.earnings = earningsRes;
     for (const f of earningsRes.findings) {
       if (
+        f.type !== 'INCENTIVE_DISCREPANCY' &&
         f.evidenceIds &&
         f.evidenceIds.length > 0 &&
         !findings.some(
@@ -109,13 +110,25 @@ export class SupervisorAgent implements Agent<SupervisorInput, SupervisorOutput>
       );
     }
 
+    // Grounding: Missing or contradictory critical evidence reduces confidence
+    let baseConfidence = Math.min(forensicsRes.confidence, earningsRes.confidence);
+    const criticalMissing = forensicsRes.missingEvidence.filter(
+      (m) => m.includes('TRAFFIC_DELAY') || m.includes('GPS') || m.includes('Handover') || m.includes('Scan')
+    );
+    if (criticalMissing.length > 0) {
+      baseConfidence = Math.max(0.2, baseConfidence - criticalMissing.length * 0.25);
+    }
+    if (forensicsRes.findings.some((f) => f.confidence < 0.5)) {
+      baseConfidence = Math.min(baseConfidence, 0.3);
+    }
+
     const investigationResult: AIInvestigationResult = {
       summary: `Multi-agent investigation for trip ${tripId}: Merchant wait time of ${Math.floor(forensicsRes.reconstruction.waitingDurationSeconds / 60)} minutes left insufficient transit time (${Math.floor(forensicsRes.reconstruction.remainingSlaSecondsAfterWait / 60)}m remaining of ${Math.floor(forensicsRes.reconstruction.allocatedSlaSeconds / 60)}m SLA). Penalty of ₹${forensicsRes.platformClaim.penaltyAmount} is contested by verified telemetry.`,
       findings,
       missingEvidence,
       contradictions,
       recommendedActions,
-      confidence: Math.min(forensicsRes.confidence, earningsRes.confidence),
+      confidence: Math.round(baseConfidence * 100) / 100,
     };
 
     const validated = validateAIInvestigationResult(investigationResult);

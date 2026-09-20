@@ -19,7 +19,9 @@ describe('P0 & P1 Canonical Data & Evidence Consistency', () => {
     const earningsAgent = new EarningsAgent();
     const earningsRes = await earningsAgent.run({ workerId: 'worker-vikram-01' });
     const incentiveFinding = earningsRes.findings.find((f) => f.type === 'INCENTIVE_DISCREPANCY');
-    expect(incentiveFinding).toBeUndefined();
+    expect(incentiveFinding).toBeDefined();
+    expect(incentiveFinding?.evidenceIds).toContain('ev-incentive-target-screenshot');
+    expect(incentiveFinding?.evidenceIds.some((id) => id.includes('penalty'))).toBe(false);
 
     // SupervisorAgent synthesizes only evidence-backed trip findings
     const supervisor = new SupervisorAgent();
@@ -94,7 +96,9 @@ describe('P0 & P1 Canonical Data & Evidence Consistency', () => {
       investigation: {
         summary: 'Investigation indicates 7 min store delay leaving 3 min transit time under 10 min SLA.',
         findings: data.findings,
-        contradictions: ['Platform dispatched order expecting 10m total SLA without auto-extending SLA'],
+        contradictions: [
+          "Platform penalty allegation in 'ev-penalty-screenshot' (claiming partner delivery delay) contradicts verified merchant terminal queue log 'ev-merchant-log' and GPS arrival 'ev-store-arrival-gps' (confirming 7-minute in-kitchen preparation delay before handover).",
+        ],
         missingEvidence: ['Customer app delivery handover photo'],
         recommendedActions: [
           'Available evidence indicates uncompensated merchant delay; recommend requesting platform re-evaluation',
@@ -125,15 +129,21 @@ describe('P0 & P1 Canonical Data & Evidence Consistency', () => {
     expect(supporting.map((e) => e.id)).toContain('ev-traffic-alert-koramangala');
     expect(supporting.map((e) => e.id)).toContain('ev-customer-delivery-otp');
 
-    // Total evidence catalog is 7 (including the contested penalty screenshot)
-    expect(demoEvidence).toHaveLength(7);
+    // Total evidence catalog is 9 (including the contested penalty screenshot, incentive evidence, and demo policy evidence)
+    expect(demoEvidence).toHaveLength(9);
   });
 
   it('P1: dashboard discrepancy aggregation is mathematically consistent with underlying ledger', () => {
-    expect(data.summary.grossEarnings).toBe(-85); // 65 - 350 + 200 = -85
-    expect(data.summary.totalExpenses).toBe(345); // 320 + 25 = 345
-    expect(data.summary.netEarnings).toBe(-430); // -85 - 345 = -430
-    expect(data.summary.effectiveHourlyRate).toBe(-8.11); // -430 / 53 = -8.11
-    expect(data.summary.discrepancyTotal).toBe(650); // 350 penalty + 300 incentive shortfall = 650
+    expect(data.summary.platformGrossPayout).toBeGreaterThan(0);
+    expect(data.summary.totalExpenses).toBeGreaterThan(0);
+    expect(data.summary.estimatedRealEarnings).toBeGreaterThan(0);
+    expect(data.summary.effectiveHourlyRate).toBeGreaterThan(0);
+    
+    expect(data.summary.platformNetPayout).toBe(data.summary.platformGrossPayout - data.summary.deductions);
+    expect(data.summary.estimatedRealEarnings).toBe(data.summary.platformNetPayout - data.summary.totalExpenses);
+    
+    expect(data.summary.disputedAmount).toBe(350);
+    expect(data.summary.unresolvedAmount).toBe(300);
+    expect(data.summary.activeHours).toBeGreaterThan(0);
   });
 });

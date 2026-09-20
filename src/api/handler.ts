@@ -34,6 +34,43 @@ export async function handler(
   event: APIGatewayProxyEvent,
   _context?: Context
 ): Promise<APIGatewayProxyResult> {
+  const aiService = getAIService();
+  const evidenceStore = getEvidenceStore();
+
+  // Handle direct Step Functions invocation payloads
+  const directEvent = event as unknown as Record<string, unknown>;
+  if (directEvent && typeof directEvent.action === 'string') {
+    const action = directEvent.action;
+    if (action === 'INGEST_EVIDENCE') {
+      const workerId = (directEvent.workerId as string) || demoWorker.id;
+      const evidence = await evidenceStore.listEvidenceByWorker(workerId);
+      return formatResponse(200, {
+        status: 'SUCCESS',
+        action,
+        count: evidence.length,
+        evidenceIds: evidence.map((e) => e.id),
+      });
+    }
+    if (action === 'INVESTIGATE_CASE') {
+      const caseId = (directEvent.caseId as string) || (directEvent.tripId as string) || 'trip-2026-09-15-001';
+      const result = await aiService.investigateCase(caseId, directEvent);
+      return formatResponse(200, {
+        status: 'SUCCESS',
+        action,
+        investigation: result,
+      });
+    }
+    if (action === 'RECONCILE_DECISION') {
+      return formatResponse(200, {
+        status: 'SUCCESS',
+        action,
+        reconciled: true,
+        caseId: directEvent.caseId,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
   const httpMethod = event.httpMethod || 'GET';
   const path = event.path || '/';
 
@@ -45,9 +82,6 @@ export async function handler(
       body: '',
     };
   }
-
-  const aiService = getAIService();
-  const evidenceStore = getEvidenceStore();
 
   try {
     // Health check
@@ -169,17 +203,19 @@ export async function handler(
     // POST /api/worker-twin/query
     if (httpMethod === 'POST' && (path === '/api/worker-twin/query' || path === '/worker-twin/query')) {
       const body = event.body ? JSON.parse(event.body) : {};
+      const targetWorkerId = body.workerId || demoWorker.id;
+      const targetQuery = body.query || 'Shift optimization inquiry';
+
+      const { WorkerTwinAgent } = await import('../agents/worker-twin-agent.ts');
+      const agent = new WorkerTwinAgent();
+      const twinResult = await agent.run({
+        workerId: targetWorkerId,
+        query: targetQuery,
+      });
+
       return formatResponse(200, {
         success: true,
-        data: {
-          workerId: body.workerId || demoWorker.id,
-          query: body.query || 'Shift optimization inquiry',
-          answer: `Historical shift analysis indicates peak efficiency between 18:00 - 22:00 in Koramangala. Avoiding Hub 4b during rush hours improves hourly returns by ₹25/hr.`,
-          projectedEarnings: 1250,
-          optimalHours: ['18:00 - 22:00'],
-          observedFactors: ['Merchant wait times', 'Peak surge incentives'],
-          confidence: 0.91,
-        },
+        data: twinResult,
       });
     }
 

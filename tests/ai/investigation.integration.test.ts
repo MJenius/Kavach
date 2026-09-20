@@ -37,6 +37,6 @@ describe('End-to-End Investigation Golden Path', () => {
     expect(inv!.contradictions.length).toBeGreaterThan(0);
 
     // 5. Policy reasoning included in recommended actions
-    expect(inv!.recommendedActions.some((a) => a.includes('Section 4.2.1'))).toBe(true);
+    expect(inv!.recommendedActions.some((a) => a.toLowerCase().includes('merchant-delay') || a.toLowerCase().includes('merchant delay'))).toBe(true);
   });
 });

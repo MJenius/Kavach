@@ -330,6 +330,11 @@ export function validateWorkerTwinResponse(data: unknown): ValidationResult<Work
   }
   const confidence = isNumber(data.confidence) ? Math.max(0, Math.min(1, data.confidence)) : 0.5;
 
+  const validBadges = ['VERIFIED_DATA', 'SIMULATION_PROJECTION', 'POLICY_GUIDANCE', 'INSUFFICIENT_EVIDENCE'];
+  const verificationBadge = isString(data.verificationBadge) && validBadges.includes(data.verificationBadge)
+    ? (data.verificationBadge as WorkerTwinResponse['verificationBadge'])
+    : undefined;
+
   return {
     success: true,
     data: {
@@ -338,6 +343,11 @@ export function validateWorkerTwinResponse(data: unknown): ValidationResult<Work
       optimalHours: isArray(data.optimalHours) ? data.optimalHours.filter(isString) : undefined,
       observedFactors: data.observedFactors,
       confidence,
+      verificationBadge,
+      supportingTrips: isArray(data.supportingTrips) ? data.supportingTrips.filter(isString) : undefined,
+      evidenceIds: isArray(data.evidenceIds) ? data.evidenceIds.filter(isString) : undefined,
+      calculationDetails: isString(data.calculationDetails) ? data.calculationDetails : undefined,
+      isEvidenceBacked: typeof data.isEvidenceBacked === 'boolean' ? data.isEvidenceBacked : undefined,
     },
   };
 }

@@ -91,9 +91,9 @@ export class ForensicsAgent implements Agent<ForensicsAgentInput, ForensicsAnaly
     }
 
     const contradictions: string[] = [];
-    if (waitSeconds > 300) {
+    if (platformClaim && storeArrival && waitSeconds > 300) {
       contradictions.push(
-        `Platform dispatched order expecting 10m total SLA, but merchant preparation consumed ${Math.floor(waitSeconds / 60)} minutes without auto-extending SLA`
+        `Platform penalty allegation in 'ev-penalty-screenshot' (claiming partner delivery delay) contradicts verified merchant terminal queue log 'ev-merchant-log' and GPS arrival 'ev-store-arrival-gps' (confirming 7-minute in-kitchen preparation delay before handover).`
       );
     }
 
@@ -162,9 +162,13 @@ export class ForensicsAgent implements Agent<ForensicsAgentInput, ForensicsAnaly
           }
           return result.data;
         }
-        // Fall through to deterministic path on failure
-      } catch {
-        // Fall through to deterministic path on Bedrock failure
+        if (process.env.MOCK_AI === 'false') {
+          throw new Error(`Bedrock structured generation failed in ForensicsAgent: ${result.error || 'unknown error'}`);
+        }
+      } catch (err) {
+        if (process.env.MOCK_AI === 'false') {
+          throw err;
+        }
       }
     }
 
@@ -206,7 +210,7 @@ export class ForensicsAgent implements Agent<ForensicsAgentInput, ForensicsAnaly
       ],
       recommendedActions: [
         'Available evidence indicates uncompensated merchant delay; recommend submitting dispute package with GPS arrival and scan telemetry',
-        `Request platform administrative re-evaluation of ₹${platformClaim?.penaltyAmount || 350} penalty based on uncredited merchant wait time`,
+        `Request review under the applicable merchant-delay policy based on uncredited merchant wait time`,
       ],
       confidence: 0.94,
     };

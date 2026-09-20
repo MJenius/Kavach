@@ -5,13 +5,12 @@ import { App } from '../../src/app/App.tsx';
 
 describe('UI Route & Page Rendering Verification', () => {
   const routes = [
-    { path: '/', expectedText: 'Worker Overview' },
-    { path: '/dashboard', expectedText: 'Worker Overview' },
+    { path: '/', expectedText: 'Financial Command Center' },
     { path: '/earnings', expectedText: 'Earnings Reconciliation' },
-    { path: '/evidence', expectedText: 'Worker Evidence Graph' },
-    { path: '/investigation', expectedText: 'Trip Forensics' },
-    { path: '/worker-twin', expectedText: 'Worker Digital Twin' },
-    { path: '/cases', expectedText: 'Dispute Review Packages' },
+    { path: '/cases/case-trip-001/evidence', expectedText: 'All Standardized Evidence Graph Objects' },
+    { path: '/cases/case-trip-001/analysis', expectedText: 'Penalty Review' },
+    { path: '/ask-kavach', expectedText: 'Ask Kavach' },
+    { path: '/cases', expectedText: 'All Registered Cases' },
   ];
 
   for (const route of routes) {

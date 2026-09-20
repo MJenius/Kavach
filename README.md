@@ -97,7 +97,7 @@ This repository was architected to support 4 team members working in parallel wi
   * 19:09: Package received & scanned.
   * 19:16: Traffic obstruction on 80ft Road.
   * 19:24: Order delivered with customer OTP.
-* **Deterministic Finding**: Allocated SLA was 10 minutes. Store waiting consumed 7 minutes, leaving only 3 minutes for transit. Penalty warrants review under Section 4.2.1.
+* **Deterministic Finding**: Allocated SLA was 10 minutes. Store waiting consumed 7 minutes, leaving only 3 minutes for transit. Penalty warrants review under the applicable merchant-delay policy.
 * **Kavach Action**: Generate structured dispute evidence package.
 
 ---

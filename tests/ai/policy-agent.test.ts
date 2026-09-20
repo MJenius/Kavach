@@ -8,7 +8,7 @@ describe('PolicyAgent', () => {
 
     expect(result.isApplicable).toBe(true);
     expect(result.sourceUnavailable).toBe(false);
-    expect(result.relevantRule?.clauseReference).toContain('Section 4.2.1');
+    expect(result.relevantRule?.clauseReference).toContain('Merchant Delay Policy');
     expect(result.isLegalAdvice).toBe(false);
   });
 

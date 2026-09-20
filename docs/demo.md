@@ -19,5 +19,4 @@
 ### 3. Kavach Analysis
 * Total SLA allocated: 10 minutes (600s).
 * Uncompensated store wait: 7 minutes (420s).
-* Remaining transit SLA: 3 minutes (180s) for 3.2km — mathematically unfeasible.
-* Result: Penalty warrants review under Section 4.2.1 of Partner Agreement.
+* Result: Penalty warrants review under applicable merchant-delay policy terms based on uncompensated kitchen wait.

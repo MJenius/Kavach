@@ -123,18 +123,16 @@ export function createApiRouter(): Router {
       const targetWorkerId = workerId || demoWorker.id;
       const targetQuery = query || 'Shift optimization inquiry';
 
-      // We can route through AIService or direct deterministic/twin path
+      const { WorkerTwinAgent } = await import('../agents/worker-twin-agent.ts');
+      const agent = new WorkerTwinAgent();
+      const twinResult = await agent.run({
+        workerId: targetWorkerId,
+        query: targetQuery,
+      });
+
       res.json({
         success: true,
-        data: {
-          workerId: targetWorkerId,
-          query: targetQuery,
-          answer: `Historical shift analysis indicates peak efficiency between 18:00 - 22:00 in Koramangala. Avoiding Hub 4b during rush hours improves hourly returns by ₹25/hr.`,
-          projectedEarnings: 1250,
-          optimalHours: ['18:00 - 22:00'],
-          observedFactors: ['Merchant wait times', 'Peak surge incentives'],
-          confidence: 0.91,
-        },
+        data: twinResult,
       });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);

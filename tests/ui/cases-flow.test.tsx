@@ -107,4 +107,42 @@ describe('Cases Page Flow & Rendering', () => {
     expect(html).toContain('All Registered Cases');
     expect(html).toContain('case-001');
   });
+
+  it('persists and restores review packages via saveStoredReviewPackage and localStorage simulation', () => {
+    const { saveStoredReviewPackage, getStoredReviewPackage } = require('../../src/features/cases/review-package.ts');
+
+    const testPackage: ReviewPackageNavigationState = {
+      type: 'generated-review-package',
+      caseId: 'case-001',
+      tripId: 'trip-2026-09-15-001',
+      workerId: 'worker-vikram-01',
+      workerName: 'Vikram Sharma',
+      disputedAmount: 350,
+      caseStatus: 'READY',
+      investigation: {
+        summary: 'Investigation indicates 7 min store delay.',
+        findings: [],
+        contradictions: [],
+        missingEvidence: [],
+        recommendedActions: [],
+        confidence: 0.94,
+      },
+      timeline: [],
+    };
+
+    // Save package
+    saveStoredReviewPackage(testPackage);
+
+    // Retrieve package for specific case ID
+    const retrieved = getStoredReviewPackage('case-001');
+    expect(retrieved).not.toBeNull();
+    expect(retrieved?.caseId).toBe('case-001');
+    expect(retrieved?.disputedAmount).toBe(350);
+    expect(retrieved?.workerName).toBe('Vikram Sharma');
+
+    // Retrieve default package
+    const defaultRetrieved = getStoredReviewPackage();
+    expect(defaultRetrieved).not.toBeNull();
+    expect(defaultRetrieved?.caseId).toBe('case-001');
+  });
 });
