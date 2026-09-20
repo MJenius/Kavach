@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { WorkerTwinAgent } from '../../src/agents/worker-twin-agent.ts';
+import type { BedrockLLMProvider } from '../../src/ai/types.ts';
+import type { ValidationResult } from '../../src/ai/structured-output.ts';
 
 describe('WorkerTwinAgent', () => {
   it('answers shift optimization query using simulation and historical patterns', async () => {
@@ -175,5 +177,183 @@ describe('WorkerTwinAgent', () => {
     expect(result.verificationBadge).toBe('INSUFFICIENT_EVIDENCE');
     expect(result.confidence).toBe(0.0);
     expect(result.answer).toContain('Insufficient evidence');
+  });
+
+  describe('Bedrock structured-generation resilience and fallback', () => {
+    const mockWorkerId = 'worker-vikram-01';
+
+    it('accepts a valid Bedrock response with non-empty answer and valid grounding', async () => {
+      const mockBedrock: BedrockLLMProvider = {
+        modelId: 'openai.gpt-oss-120b',
+        generateText: async () => ({ text: '' }),
+        extractDocument: async () => ({} as any),
+        generateStructured: async <T>(): Promise<ValidationResult<T>> => ({
+          success: true,
+          data: {
+            answer: 'Bedrock grounded answer: The ₹350 deduction on trip trip-2026-09-15-001 was due to merchant delay of 7 minutes at store arrival 19:02 leaving 3 minutes in SLA.',
+            confidence: 0.92,
+            observedFactors: ['Verified factor 1'],
+            evidenceIds: ['ev-store-arrival-gps', 'ev-merchant-log'],
+            verificationBadge: 'VERIFIED_DATA' as const,
+          } as unknown as T,
+        }),
+      };
+
+      const agent = new WorkerTwinAgent(mockBedrock);
+      const result = await agent.run({
+        workerId: mockWorkerId,
+        query: 'Why was ₹350 deducted from my QuickBite shift on Tuesday?',
+      });
+
+      expect(result.answer).toContain('Bedrock grounded answer:');
+      expect(result.confidence).toBe(0.92);
+      expect(result.observedFactors).toContain('Verified factor 1');
+      expect(result.evidenceIds).toContain('ev-store-arrival-gps');
+    });
+
+    it('rejects hallucinated Bedrock response claiming disciplinary penalty and fake EID-2024-09-20-001', async () => {
+      const mockBedrock: BedrockLLMProvider = {
+        modelId: 'openai.gpt-oss-120b',
+        generateText: async () => ({ text: '' }),
+        extractDocument: async () => ({} as any),
+        generateStructured: async <T>(): Promise<ValidationResult<T>> => ({
+          success: true,
+          data: {
+            answer: 'The ₹350 deduction was a disciplinary penalty for cancellation of orders and acceptance rate violations.',
+            confidence: 0.96,
+            evidenceIds: ['EID-2024-09-20-001'],
+            verificationBadge: 'VERIFIED_DATA' as const,
+            isEvidenceBacked: true,
+          } as unknown as T,
+        }),
+      };
+
+      const agent = new WorkerTwinAgent(mockBedrock);
+      const result = await agent.run({
+        workerId: mockWorkerId,
+        query: 'Why was ₹350 deducted from my QuickBite shift on Tuesday?',
+      });
+
+      // Verifies the hallucinated response is completely discarded and canonical deterministic response returned
+      expect(result.answer).not.toContain('disciplinary');
+      expect(result.answer).not.toContain('cancellation');
+      expect(result.answer).not.toContain('acceptance rate');
+      expect(result.evidenceIds).not.toContain('EID-2024-09-20-001');
+
+      // Canonical grounding must be present
+      expect(result.answer).toContain('QuickBite deducted ₹350');
+      expect(result.answer).toContain('7 minutes');
+      expect(result.answer).toContain('3 minutes remaining');
+      expect(result.evidenceIds).toContain('ev-store-arrival-gps');
+      expect(result.evidenceIds).toContain('ev-merchant-log');
+      expect(result.verificationBadge).toBe('VERIFIED_DATA');
+      expect(result.isEvidenceBacked).toBe(true);
+    });
+
+    it('falls back safely to deterministic grounded engine when Bedrock returns an empty answer', async () => {
+      let callCount = 0;
+      const mockBedrock: BedrockLLMProvider = {
+        modelId: 'openai.gpt-oss-120b',
+        generateText: async () => ({ text: '' }),
+        extractDocument: async () => ({} as any),
+        generateStructured: async <T>(): Promise<ValidationResult<T>> => {
+          callCount++;
+          return {
+            success: true,
+            data: {
+              answer: '   ', // Empty/whitespace answer
+              confidence: 0.5,
+              observedFactors: [],
+            } as unknown as T,
+          };
+        },
+      };
+
+      const agent = new WorkerTwinAgent(mockBedrock);
+      const result = await agent.run({
+        workerId: mockWorkerId,
+        query: 'Why was ₹350 deducted from my QuickBite shift on Tuesday?',
+      });
+
+      // Verifies controlled repair retry was attempted
+      expect(callCount).toBe(2);
+      // Verifies deterministic grounded fallback was used without returning error
+      expect(result.answer).toContain('QuickBite deducted ₹350');
+      expect(result.answer).toContain('trip-2026-09-15-001');
+      expect(result.verificationBadge).toBe('VERIFIED_DATA');
+      expect(result.evidenceIds).toContain('ev-store-arrival-gps');
+      expect(result.evidenceIds).toContain('ev-merchant-log');
+    });
+
+    it('falls back safely to deterministic grounded engine when Bedrock returns missing answer', async () => {
+      const mockBedrock: BedrockLLMProvider = {
+        modelId: 'openai.gpt-oss-120b',
+        generateText: async () => ({ text: '' }),
+        extractDocument: async () => ({} as any),
+        generateStructured: async <T>(): Promise<ValidationResult<T>> => ({
+          success: true,
+          data: {
+            confidence: 0.8,
+            observedFactors: ['Some factor'],
+          } as unknown as T,
+        }),
+      };
+
+      const agent = new WorkerTwinAgent(mockBedrock);
+      const result = await agent.run({
+        workerId: mockWorkerId,
+        query: 'Why was ₹350 deducted from my QuickBite shift on Tuesday?',
+      });
+
+      expect(result.answer).toContain('QuickBite deducted ₹350');
+      expect(result.answer).toContain('7 minutes');
+      expect(result.verificationBadge).toBe('VERIFIED_DATA');
+    });
+
+    it('falls back safely when Bedrock throws an exception or returns malformed structured response', async () => {
+      const mockBedrock: BedrockLLMProvider = {
+        modelId: 'openai.gpt-oss-120b',
+        generateText: async () => ({ text: '' }),
+        extractDocument: async () => ({} as any),
+        generateStructured: async <T>(): Promise<ValidationResult<T>> => ({
+          success: false,
+          error: 'WorkerTwinResponse answer must be a non-empty string',
+        }),
+      };
+
+      const agent = new WorkerTwinAgent(mockBedrock);
+      const result = await agent.run({
+        workerId: mockWorkerId,
+        query: 'Why was ₹350 deducted from my QuickBite shift on Tuesday?',
+      });
+
+      expect(result.answer).toContain('₹350');
+      expect(result.verificationBadge).toBe('VERIFIED_DATA');
+      expect(result.isEvidenceBacked).toBe(true);
+      expect(result.supportingTrips).toContain('trip-2026-09-15-001');
+    });
+
+    it('unsupported question remains an honest insufficient evidence refusal even during Bedrock failure', async () => {
+      const mockBedrock: BedrockLLMProvider = {
+        modelId: 'openai.gpt-oss-120b',
+        generateText: async () => ({ text: '' }),
+        extractDocument: async () => ({} as any),
+        generateStructured: async <T>(): Promise<ValidationResult<T>> => ({
+          success: false,
+          error: 'Bedrock connection timed out',
+        }),
+      };
+
+      const agent = new WorkerTwinAgent(mockBedrock);
+      const result = await agent.run({
+        workerId: mockWorkerId,
+        query: 'What will the weather in Mumbai be next week?',
+      });
+
+      expect(result.verificationBadge).toBe('INSUFFICIENT_EVIDENCE');
+      expect(result.confidence).toBe(0.0);
+      expect(result.answer).toContain('Insufficient evidence');
+      expect(result.observedFactors.some((f) => f.includes('never fabricates'))).toBe(true);
+    });
   });
 });

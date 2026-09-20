@@ -357,8 +357,21 @@ export function parseSafeJson<T>(
   validator: (data: unknown) => ValidationResult<T>
 ): ValidationResult<T> {
   try {
-    const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
-    const parsed = JSON.parse(cleaned);
+    let text = raw.trim();
+    // 1. Remove markdown code fences if present
+    const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (fenceMatch) {
+      text = fenceMatch[1].trim();
+    } else {
+      // 2. If no code fence but contains { ... }, locate the outermost JSON object
+      const firstBrace = text.indexOf('{');
+      const lastBrace = text.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        text = text.substring(firstBrace, lastBrace + 1);
+      }
+    }
+
+    const parsed = JSON.parse(text);
     return validator(parsed);
   } catch (err) {
     return {
