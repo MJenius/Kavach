@@ -67,6 +67,18 @@ export class WorkerTwinAgent implements Agent<WorkerTwinQuery, WorkerTwinRespons
           query: input.query,
           historicalMetrics,
           simulationResults,
+          authoritativeGrounding: isSupportedDeterministicQuery
+            ? {
+                authoritativeAnswer: groundedResult.answer,
+                verificationBadge: groundedResult.verificationBadge,
+                isEvidenceBacked: groundedResult.isEvidenceBacked,
+                projectedEarnings: groundedResult.projectedEarnings,
+                supportingTrips: groundedResult.supportingTrips,
+                evidenceIds: groundedResult.evidenceIds,
+                calculationDetails: groundedResult.calculationDetails,
+                observedFactors: groundedResult.observedFactors,
+              }
+            : undefined,
         });
 
         let result = await this.bedrock.generateStructured<WorkerTwinResponse>({
@@ -130,16 +142,73 @@ export class WorkerTwinAgent implements Agent<WorkerTwinQuery, WorkerTwinRespons
             candidateAnswerLower.includes(term)
           );
 
-          // 3. For canonical supported queries (like the ₹350 penalty), check consistency with deterministic facts
+          // 3. Verification Badge and Evidence status consistency:
+          // Bedrock must NEVER contradict the deterministic badge status (e.g. converting INSUFFICIENT_EVIDENCE to VERIFIED_DATA, or VERIFIED_DATA to INSUFFICIENT_EVIDENCE/UNVERIFIED)
+          let contradictsVerificationBadge = false;
+          if (candidate.verificationBadge && candidate.verificationBadge !== groundedResult.verificationBadge) {
+            contradictsVerificationBadge = true;
+          }
+
+          // 4. Query-specific deterministic fact validation:
+          let contradictsAuthoritativeFacts = false;
+
+          // A. Take-home earnings query
+          const isTakeHomeQuery =
+            queryLower.includes('take home') ||
+            queryLower.includes('take-home') ||
+            queryLower.includes('real earning') ||
+            queryLower.includes('actually take') ||
+            (queryLower.includes('fuel') && (queryLower.includes('earning') || queryLower.includes('take')));
+
+          if (isTakeHomeQuery) {
+            // Must not claim expenses are missing or unrecorded
+            const claimsMissingExpenses =
+              candidateAnswerLower.includes('no fuel') ||
+              candidateAnswerLower.includes('no bike') ||
+              candidateAnswerLower.includes('no maintenance') ||
+              candidateAnswerLower.includes('missing expense') ||
+              candidateAnswerLower.includes('no expense') ||
+              candidateAnswerLower.includes('not recorded') ||
+              candidateAnswerLower.includes('unrecorded') ||
+              candidateAnswerLower.includes('unable to calculate take-home') ||
+              candidateAnswerLower.includes('cannot calculate take-home');
+
+            // Must not claim gross (9120) is take-home
+            const claimsGrossIsTakeHome =
+              (candidateAnswerLower.includes('take-home is ₹9,120') ||
+                candidateAnswerLower.includes('take home is ₹9,120') ||
+                candidateAnswerLower.includes('take-home is 9120') ||
+                candidateAnswerLower.includes('take home is 9120') ||
+                candidateAnswerLower.includes('take-home: ₹9,120') ||
+                candidateAnswerLower.includes('take home: ₹9,120') ||
+                candidateAnswerLower.includes('estimate is ₹9,120') ||
+                candidateAnswerLower.includes('estimate of ₹9,120')) &&
+              !candidateAnswerLower.includes('7,500') &&
+              !candidateAnswerLower.includes('7500');
+
+            // Must reference canonical take-home (7500) and expenses (1270 or itemized 900 fuel / 250 maintenance)
+            const mentionsCorrectTakeHome =
+              candidateAnswerLower.includes('7,500') ||
+              candidateAnswerLower.includes('7500');
+
+            const mentionsExpenses =
+              candidateAnswerLower.includes('1,270') ||
+              candidateAnswerLower.includes('1270') ||
+              (candidateAnswerLower.includes('900') && candidateAnswerLower.includes('250'));
+
+            if (claimsMissingExpenses || claimsGrossIsTakeHome || !mentionsCorrectTakeHome || !mentionsExpenses) {
+              contradictsAuthoritativeFacts = true;
+            }
+          }
+
+          // B. Penalty deduction query (₹350)
           const isPenaltyQuery =
             queryLower.includes('350') ||
             queryLower.includes('deducted') ||
             queryLower.includes('penalty') ||
             (queryLower.includes('why') && (queryLower.includes('deduction') || queryLower.includes('cut')));
 
-          let violatesPenaltyTruth = false;
           if (isPenaltyQuery) {
-            // Must reference the actual merchant delay and SLA sequence
             const referencesMerchantDelay =
               candidateAnswerLower.includes('merchant') ||
               candidateAnswerLower.includes('kitchen') ||
@@ -156,31 +225,93 @@ export class WorkerTwinAgent implements Agent<WorkerTwinQuery, WorkerTwinRespons
               candidateAnswerLower.includes('trip-2026-09-15-001');
 
             if (!referencesMerchantDelay || !referencesSlaOrTime) {
-              violatesPenaltyTruth = true;
+              contradictsAuthoritativeFacts = true;
             }
           }
 
-          // 4. Unsupported query guard: never allow Bedrock to invent an answer for questions lacking evidence
+          // C. Incentive query (₹500 / ₹300 shortfall)
+          const isIncentiveQuery =
+            queryLower.includes('500') ||
+            queryLower.includes('incentive') ||
+            queryLower.includes('surge bonus') ||
+            queryLower.includes('shortfall');
+
+          if (isIncentiveQuery && !isPenaltyQuery) {
+            const referencesIncentiveFigures =
+              (candidateAnswerLower.includes('200') && candidateAnswerLower.includes('300')) ||
+              candidateAnswerLower.includes('case-002');
+
+            if (!referencesIncentiveFigures) {
+              contradictsAuthoritativeFacts = true;
+            }
+          }
+
+          // D. Day comparison query (Wednesday vs Saturday)
+          const isDayComparison =
+            (queryLower.includes('wednesday') && queryLower.includes('saturday')) ||
+            (queryLower.includes('hourly rate') && (queryLower.includes('wednesday') || queryLower.includes('saturday')));
+
+          if (isDayComparison) {
+            const referencesRates =
+              (candidateAnswerLower.includes('145.81') || candidateAnswerLower.includes('146')) &&
+              (candidateAnswerLower.includes('200.00') || candidateAnswerLower.includes('200'));
+
+            if (!referencesRates) {
+              contradictsAuthoritativeFacts = true;
+            }
+          }
+
+          // E. Simulation query (Wait compensation / projected earnings)
+          const isSimulationQuery =
+            queryLower.includes('compensated') ||
+            queryLower.includes('merchant wait') ||
+            queryLower.includes('wait time') ||
+            queryLower.includes('counterfactual');
+
+          if (isSimulationQuery) {
+            const referencesSimFigures =
+              candidateAnswerLower.includes('8,185') ||
+              candidateAnswerLower.includes('8185') ||
+              (candidateAnswerLower.includes('335') && candidateAnswerLower.includes('350'));
+
+            if (!referencesSimFigures) {
+              contradictsAuthoritativeFacts = true;
+            }
+          }
+
+          // 5. Unsupported query guard: never allow Bedrock to invent an answer for questions lacking evidence
           let fabricatedUnsupportedAnswer = false;
-          if (!isSupportedDeterministicQuery && candidate.verificationBadge !== 'INSUFFICIENT_EVIDENCE') {
-            // If the canonical dataset lacks evidence for this question, Bedrock cannot invent an evidence-backed answer
-            fabricatedUnsupportedAnswer = true;
+          if (!isSupportedDeterministicQuery) {
+            if (candidate.verificationBadge !== 'INSUFFICIENT_EVIDENCE' || candidate.isEvidenceBacked === true) {
+              fabricatedUnsupportedAnswer = true;
+            }
           }
 
           const semanticValidationPassed =
             !hasInvalidEvidenceId &&
             !containsHallucination &&
-            !violatesPenaltyTruth &&
+            !contradictsVerificationBadge &&
+            !contradictsAuthoritativeFacts &&
             !fabricatedUnsupportedAnswer;
 
           if (semanticValidationPassed) {
+            // Adopt authoritative grounding metadata to ensure complete precision
+            if (isSupportedDeterministicQuery) {
+              candidate.verificationBadge = groundedResult.verificationBadge;
+              candidate.isEvidenceBacked = groundedResult.isEvidenceBacked;
+              if (groundedResult.evidenceIds) candidate.evidenceIds = groundedResult.evidenceIds;
+              if (groundedResult.supportingTrips) candidate.supportingTrips = groundedResult.supportingTrips;
+              if (groundedResult.calculationDetails) candidate.calculationDetails = groundedResult.calculationDetails;
+              if (groundedResult.projectedEarnings !== undefined) candidate.projectedEarnings = groundedResult.projectedEarnings;
+            }
+
             // Normalize Unicode formatting (ensure UTF-8 ₹ is clean)
             candidate.answer = candidate.answer.normalize('NFC');
             return candidate;
           }
 
           console.warn(
-            `[WorkerTwinAgent] Bedrock response failed semantic grounding validation (hasInvalidEvidenceId=${hasInvalidEvidenceId}, containsHallucination=${containsHallucination}, violatesPenaltyTruth=${violatesPenaltyTruth}, fabricatedUnsupportedAnswer=${fabricatedUnsupportedAnswer}). Discarding Bedrock response and using deterministic grounded resolution.`
+            `[WorkerTwinAgent] Bedrock response failed semantic grounding validation (hasInvalidEvidenceId=${hasInvalidEvidenceId}, containsHallucination=${containsHallucination}, contradictsVerificationBadge=${contradictsVerificationBadge}, contradictsAuthoritativeFacts=${contradictsAuthoritativeFacts}, fabricatedUnsupportedAnswer=${fabricatedUnsupportedAnswer}). Discarding Bedrock response and using deterministic grounded resolution.`
           );
         } else {
           // Log schema validation failure

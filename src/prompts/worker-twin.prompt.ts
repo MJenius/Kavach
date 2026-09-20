@@ -28,12 +28,13 @@ export function generateWorkerTwinUserPrompt(input: {
   query: string;
   historicalMetrics: Record<string, unknown>;
   simulationResults?: Record<string, unknown>;
+  authoritativeGrounding?: Record<string, unknown>;
 }): string {
   return `Worker Question: "${input.query}"
 Worker: ${input.workerId}
 Historical Operating Profile: ${JSON.stringify(input.historicalMetrics, null, 2)}
 Simulation Results: ${JSON.stringify(input.simulationResults || null, null, 2)}
-
+${input.authoritativeGrounding ? `Authoritative Grounded Facts (CRITICAL: Do NOT contradict these calculations, figures, or evidence IDs):\n${JSON.stringify(input.authoritativeGrounding, null, 2)}\n` : ''}
 Produce a valid JSON object strictly conforming to WorkerTwinResponse.
-Ensure the "answer" property contains a complete, non-empty explanation directly addressing the worker's question.`;
+Ensure the "answer" property contains a complete, non-empty explanation directly addressing the worker's question while remaining strictly faithful to the verified facts.`;
 }

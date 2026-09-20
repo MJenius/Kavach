@@ -355,5 +355,164 @@ describe('WorkerTwinAgent', () => {
       expect(result.answer).toContain('Insufficient evidence');
       expect(result.observedFactors.some((f) => f.includes('never fabricates'))).toBe(true);
     });
+
+    // Test A: Take-home query with hallucinated Bedrock response claiming ₹9,120 and missing expenses -> deterministic ₹7,500
+    it('Regression A: rejects hallucinated Bedrock take-home response claiming ₹9,120 and missing expenses -> returns deterministic ₹7,500 result', async () => {
+      const mockBedrock: BedrockLLMProvider = {
+        modelId: 'openai.gpt-oss-120b',
+        generateText: async () => ({ text: '' }),
+        extractDocument: async () => ({} as any),
+        generateStructured: async <T>(): Promise<ValidationResult<T>> => ({
+          success: true,
+          data: {
+            answer: 'Your gross earnings are ₹9,120. However, there are no fuel or bike maintenance records found, so your best take-home estimate is ₹9,120.',
+            confidence: 0.95,
+            verificationBadge: 'INSUFFICIENT_EVIDENCE' as const,
+            isEvidenceBacked: false,
+          } as unknown as T,
+        }),
+      };
+
+      const agent = new WorkerTwinAgent(mockBedrock);
+      const result = await agent.run({
+        workerId: mockWorkerId,
+        query: 'How much did I actually take home after fuel and bike maintenance this week?',
+      });
+
+      // Bad Bedrock answer claiming 9,120 take-home and missing expenses must be discarded
+      expect(result.answer).not.toContain('no fuel');
+      expect(result.answer).not.toContain('no bike maintenance');
+      expect(result.answer).not.toContain('estimate is ₹9,120');
+
+      // Canonical deterministic facts must be present
+      expect(result.answer).toContain('7,500');
+      expect(result.answer).toContain('9,120');
+      expect(result.answer).toContain('1,270');
+      expect(result.answer).toContain('Fuel: ₹900');
+      expect(result.answer).toContain('Bike Maintenance: ₹250');
+      expect(result.verificationBadge).toBe('VERIFIED_DATA');
+      expect(result.isEvidenceBacked).toBe(true);
+      expect(result.calculationDetails).toContain('Effective Rate: ₹7500 / 47.55 hrs = ₹157.73/hr');
+    });
+
+    // Test B: Valid take-home Bedrock response containing ₹7,500, ₹1,270 expenses, ₹900 fuel, ₹250 maintenance -> may be accepted if facts agree
+    it('Regression B: accepts valid Bedrock take-home response that preserves authoritative ₹7,500 and itemized expenses', async () => {
+      const mockBedrock: BedrockLLMProvider = {
+        modelId: 'openai.gpt-oss-120b',
+        generateText: async () => ({ text: '' }),
+        extractDocument: async () => ({} as any),
+        generateStructured: async <T>(): Promise<ValidationResult<T>> => ({
+          success: true,
+          data: {
+            answer: 'After accounting for ₹1,270 in operating expenses (₹900 fuel and ₹250 maintenance), your real take-home this week is ₹7,500.',
+            confidence: 0.95,
+            verificationBadge: 'VERIFIED_DATA' as const,
+            isEvidenceBacked: true,
+            observedFactors: ['Verified fuel and maintenance receipts'],
+          } as unknown as T,
+        }),
+      };
+
+      const agent = new WorkerTwinAgent(mockBedrock);
+      const result = await agent.run({
+        workerId: mockWorkerId,
+        query: 'How much did I actually take home after fuel and bike maintenance this week?',
+      });
+
+      expect(result.answer).toContain('₹7,500');
+      expect(result.answer).toContain('₹1,270');
+      expect(result.verificationBadge).toBe('VERIFIED_DATA');
+      expect(result.isEvidenceBacked).toBe(true);
+    });
+
+    // Test C: Unsupported future earnings query -> INSUFFICIENT_EVIDENCE without hallucination
+    it('Regression C: unsupported future earnings query remains INSUFFICIENT_EVIDENCE and rejects Bedrock forecast', async () => {
+      const mockBedrock: BedrockLLMProvider = {
+        modelId: 'openai.gpt-oss-120b',
+        generateText: async () => ({ text: '' }),
+        extractDocument: async () => ({} as any),
+        generateStructured: async <T>(): Promise<ValidationResult<T>> => ({
+          success: true,
+          data: {
+            answer: 'Next week you will earn approximately ₹11,500 based on demand forecast.',
+            confidence: 0.9,
+            verificationBadge: 'VERIFIED_DATA' as const,
+            isEvidenceBacked: true,
+          } as unknown as T,
+        }),
+      };
+
+      const agent = new WorkerTwinAgent(mockBedrock);
+      const result = await agent.run({
+        workerId: mockWorkerId,
+        query: 'What is my next weeks earning?',
+      });
+
+      expect(result.verificationBadge).toBe('INSUFFICIENT_EVIDENCE');
+      expect(result.isEvidenceBacked).toBe(false);
+      expect(result.confidence).toBe(0.0);
+      expect(result.answer).toContain('Insufficient evidence');
+      expect(result.answer).not.toContain('11,500');
+    });
+
+    // Test E: Wednesday vs Saturday -> deterministic rates remain authoritative
+    it('Regression E: preserves authoritative hourly rates on Wednesday vs Saturday comparison', async () => {
+      const mockBedrock: BedrockLLMProvider = {
+        modelId: 'openai.gpt-oss-120b',
+        generateText: async () => ({ text: '' }),
+        extractDocument: async () => ({} as any),
+        generateStructured: async <T>(): Promise<ValidationResult<T>> => ({
+          success: true,
+          data: {
+            answer: 'You made about ₹180/hr on Wednesday and ₹190/hr on Saturday.',
+            confidence: 0.8,
+            verificationBadge: 'VERIFIED_DATA' as const,
+          } as unknown as T,
+        }),
+      };
+
+      const agent = new WorkerTwinAgent(mockBedrock);
+      const result = await agent.run({
+        workerId: mockWorkerId,
+        query: 'What was my hourly rate on Wednesday vs Saturday?',
+      });
+
+      // Bedrock's incorrect 180 vs 190 must be rejected and deterministic 145.81 vs 200.00 returned
+      expect(result.answer).toContain('145.81');
+      expect(result.answer).toContain('200.00');
+      expect(result.verificationBadge).toBe('VERIFIED_DATA');
+      expect(result.calculationDetails).toContain('₹145.81/hr');
+      expect(result.calculationDetails).toContain('₹200.00/hr');
+    });
+
+    // Test F: Compensation simulation -> deterministic projected values remain authoritative
+    it('Regression F: preserves authoritative values in merchant wait compensation counterfactual', async () => {
+      const mockBedrock: BedrockLLMProvider = {
+        modelId: 'openai.gpt-oss-120b',
+        generateText: async () => ({ text: '' }),
+        extractDocument: async () => ({} as any),
+        generateStructured: async <T>(): Promise<ValidationResult<T>> => ({
+          success: true,
+          data: {
+            answer: 'Your earnings would increase by ₹1,000 if wait times were compensated.',
+            confidence: 0.85,
+            verificationBadge: 'SIMULATION_PROJECTION' as const,
+          } as unknown as T,
+        }),
+      };
+
+      const agent = new WorkerTwinAgent(mockBedrock);
+      const result = await agent.run({
+        workerId: mockWorkerId,
+        query: 'How much would earnings increase if merchant wait were compensated?',
+      });
+
+      // Bedrock's invented ₹1,000 must be rejected and deterministic +₹335 wait, +₹350 penalty, ₹8,185 total returned
+      expect(result.answer).toContain('335');
+      expect(result.answer).toContain('350');
+      expect(result.answer).toContain('8,185');
+      expect(result.projectedEarnings).toBe(8185);
+      expect(result.verificationBadge).toBe('SIMULATION_PROJECTION');
+    });
   });
 });
