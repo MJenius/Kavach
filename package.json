@@ -2,7 +2,7 @@
   "name": "kavach-ai",
   "version": "0.1.0",
   "private": true,
-  "description": "Kavach AI - Independent AI-powered work intelligence and protection layer for gig workers",
+  "description": "Kavach AI - Trustworthy Multi-Agent AI Evaluation System",
   "type": "module",
   "scripts": {
     "dev": "concurrently -n \"api,ui\" -c \"blue,green\" \"npm run dev:api\" \"npm run dev:ui\"",
@@ -12,6 +12,7 @@
     "build:lambda": "esbuild src/api/index.ts --bundle --platform=node --target=node20 --format=esm \"--banner:js=import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=dist-lambda/index.mjs",
     "lint": "eslint .",
     "test": "vitest run",
+    "eval:trust": "tsx scripts/evaluate-trust.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm run lint && npm run test && npm run build"

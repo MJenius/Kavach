@@ -8,6 +8,11 @@ import { EarningsAgent } from './earnings-agent.ts';
 import { PolicyAgent } from './policy-agent.ts';
 import { WorkerTwinAgent } from './worker-twin-agent.ts';
 import { getAgentRuntimeConfig } from './agent-config.ts';
+import { getEvidence } from './tools/index.ts';
+
+export function keepEvidenceBackedFindings(findings: Finding[], knownEvidenceIds: Set<string>): Finding[] {
+  return findings.filter((finding) => finding.evidenceIds.length > 0 && finding.evidenceIds.every((id) => knownEvidenceIds.has(id)));
+}
 
 export interface SupervisorInput {
   caseId?: string;
@@ -78,9 +83,12 @@ export class SupervisorAgent implements Agent<SupervisorInput, SupervisorOutput>
       }),
     ]);
 
+    // Treat specialist results as untrusted at the synthesis boundary too.
+    const knownEvidenceIds = new Set((await getEvidence(input.workerId)).map((item) => item.id));
+
     // 1. Forensics
     agentResults.forensics = forensicsRes;
-    findings.push(...forensicsRes.findings);
+    findings.push(...keepEvidenceBackedFindings(forensicsRes.findings, knownEvidenceIds));
     missingEvidence.push(...forensicsRes.missingEvidence);
     contradictions.push(...forensicsRes.contradictions);
     recommendedActions.push(...forensicsRes.recommendedActions);
@@ -91,7 +99,7 @@ export class SupervisorAgent implements Agent<SupervisorInput, SupervisorOutput>
       if (
         f.type !== 'INCENTIVE_DISCREPANCY' &&
         f.evidenceIds &&
-        f.evidenceIds.length > 0 &&
+        keepEvidenceBackedFindings([f], knownEvidenceIds).length > 0 &&
         !findings.some(
           (existing) =>
             existing.id === f.id ||

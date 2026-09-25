@@ -1,8 +1,10 @@
-# Kavach AI
+# Kavach AI — Trustworthy Multi-Agent AI Evaluation System
 
-> **Independent AI-Powered Work Intelligence and Protection Layer for Gig Workers**
+> **Trustworthy Multi-Agent AI Evaluation System**
 
 Kavach AI gives gig workers an independent understanding of what happened during their delivery shifts, what they earned, what went wrong (e.g., unexplained deductions, merchant queue delays, disputed penalties), and what actionable steps they can take next.
+
+The repository includes deterministic evidence grounding and a reproducible local adversarial evaluation. Current measured results and scope are in [the generated trust evaluation](results/evaluation/trust-benchmark.md); regenerate it with `npm run eval:trust`. The benchmark uses a synthetic canonical fixture and a stubbed model provider, so its results do not represent AWS/Bedrock performance or broad real-world safety.
 
 ---
 
@@ -30,6 +32,7 @@ npm run dev
 * `npm run typecheck`: Runs TypeScript type check across the entire project (`tsc --noEmit`).
 * `npm test`: Runs automated Vitest test suite.
 * `npm run build`: Compiles production frontend bundle.
+* `npm run eval:trust`: Runs the deterministic Worker Twin grounding and failure-injection benchmark; writes JSON and Markdown under `results/evaluation/`.
 
 ---
 
@@ -103,6 +106,14 @@ This repository was architected to support 4 team members working in parallel wi
 ---
 
 ## 5. Documentation Map
+
+## Local trust evaluation
+
+Run `npm run eval:trust` for the deterministic 45-scenario synthetic suite. It reports candidate/fallback outcomes, evidence attribution, tested monetary, timestamp, contradiction checks, and measured supervisor routing. The benchmark uses a local stub only; no AWS or Bedrock inference occurs. See [`results/evaluation/trust-benchmark.md`](results/evaluation/trust-benchmark.md) and its JSON companion. Current non-twin routes call all three specialists, producing unnecessary local calls for earnings-only and trip-only actions. Other declared baseline modes remain unmeasured.
+
+The final supervisor synthesis now drops any specialist finding with no evidence IDs or IDs absent from the worker evidence store. The suite does not cover stale evidence policy, specialist disagreement, policy violations, or timeout behavior.
+
+The local production build currently emits a 536.83 kB JavaScript chunk, above Vite's 500 kB advisory threshold; the build succeeds with the warning visible.
 
 * [`plan.md`](plan.md): Repository source of truth and complete product engineering plan.
 * [`docs/contributing.md`](docs/contributing.md): Branching, PR guidelines, and ownership rules.

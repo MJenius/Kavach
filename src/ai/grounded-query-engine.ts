@@ -311,7 +311,7 @@ export function resolveGroundedWorkerQuery(params: GroundedQueryParams): WorkerT
     isEvidenceBacked: false,
     observedFactors: [
       `No matching trip events or ledger records found for query: "${params.query}"`,
-      'Kavach never fabricates unverified claims or estimates',
+      'This response does not estimate facts that are absent from the available records',
     ],
   };
 }

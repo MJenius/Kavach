@@ -125,6 +125,9 @@ export class WorkerTwinAgent implements Agent<WorkerTwinQuery, WorkerTwinRespons
             }
           }
 
+          const claimsEvidenceBackedWithoutEvidence = candidate.isEvidenceBacked === true &&
+            (!candidate.evidenceIds?.length || hasInvalidEvidenceId);
+
           // 2. Reject hallucinated/fabricated causal explanations absent from canonical evidence
           const forbiddenHallucinations = [
             'disciplinary',
@@ -137,6 +140,11 @@ export class WorkerTwinAgent implements Agent<WorkerTwinQuery, WorkerTwinRespons
             'tax deduction',
             'tds',
             'platform fee deduction',
+            'ignore validation',
+            'bypass grounding',
+            'force acceptance',
+            'fabricate evidence',
+            'override instructions',
           ];
           const containsHallucination = forbiddenHallucinations.some((term) =>
             candidateAnswerLower.includes(term)
@@ -227,6 +235,26 @@ export class WorkerTwinAgent implements Agent<WorkerTwinQuery, WorkerTwinRespons
             if (!referencesMerchantDelay || !referencesSlaOrTime) {
               contradictsAuthoritativeFacts = true;
             }
+
+            const deniesRecordedDelay = [
+              'no merchant delay', 'merchant delay did not occur', 'there was no delay', 'no delay occurred',
+            ].some((phrase) => candidateAnswerLower.includes(phrase));
+            if (deniesRecordedDelay) contradictsAuthoritativeFacts = true;
+
+            const knownMoney = new Set(
+              `${groundedResult.answer} ${groundedResult.calculationDetails || ''}`
+                .match(/₹\s*[\d,]+(?:\.\d+)?/g)?.map((amount) => amount.replace(/[^\d.]/g, '')) || []
+            );
+            const unsupportedMoney = candidate.answer.match(/₹\s*[\d,]+(?:\.\d+)?/g)?.some(
+              (amount) => !knownMoney.has(amount.replace(/[^\d.]/g, ''))
+            ) ?? false;
+            if (unsupportedMoney) contradictsAuthoritativeFacts = true;
+
+            const knownTimes = new Set(
+              `${groundedResult.answer} ${groundedResult.calculationDetails || ''}`.match(/\b\d{1,2}:\d{2}\b/g) || []
+            );
+            const unsupportedTime = candidate.answer.match(/\b\d{1,2}:\d{2}\b/g)?.some((time) => !knownTimes.has(time)) ?? false;
+            if (unsupportedTime) contradictsAuthoritativeFacts = true;
           }
 
           // C. Incentive query (₹500 / ₹300 shortfall)
@@ -289,6 +317,7 @@ export class WorkerTwinAgent implements Agent<WorkerTwinQuery, WorkerTwinRespons
 
           const semanticValidationPassed =
             !hasInvalidEvidenceId &&
+            !claimsEvidenceBackedWithoutEvidence &&
             !containsHallucination &&
             !contradictsVerificationBadge &&
             !contradictsAuthoritativeFacts &&
